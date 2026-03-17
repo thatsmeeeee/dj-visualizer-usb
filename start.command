@@ -53,17 +53,17 @@ elif command -v python >/dev/null 2>&1; then
 elif command -v npx >/dev/null 2>&1; then
   start_with_cmd "npx --yes http-server -p __PORT__ -c-1 ." || true
 else
-  echo "Nenasel jsem Python ani Node.js (npx)."
-  echo "Nainstaluj Python 3 nebo Node.js a spust start.command znovu."
+  echo "Could not find Python or Node.js (npx)."
+  echo "Install Python 3 or Node.js and run start.command again."
   exit 1
 fi
 
 if [[ -z "${SERVER_PID}" || -z "${URL}" ]]; then
-  echo "Server se nepodarilo spustit na portech 8080/8081/8082."
+  echo "Failed to start server on ports 8080/8081/8082."
   exit 2
 fi
 
-echo "Server bezi na ${URL}"
+echo "Server running at ${URL}"
 
 CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 if [[ -x "${CHROME_BIN}" ]]; then
@@ -85,6 +85,6 @@ if [[ -x "${CHROME_BIN}" ]]; then
   wait "${BROWSER_PID}" || true
 else
   open "${URL}"
-  echo "Chrome nenalezen, otevrel se vychozi prohlizec."
-  read -r -p "Po dokonceni testu stiskni Enter pro ukonceni serveru..." _
+  echo "Chrome not found, opening default browser."
+  read -r -p "Press Enter when done to stop the server..." _
 fi

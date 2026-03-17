@@ -11,8 +11,8 @@ if not defined SERVER_TEMPLATE where python3 >nul 2>nul && set "SERVER_TEMPLATE=
 if not defined SERVER_TEMPLATE where npx >nul 2>nul && set "SERVER_TEMPLATE=npx --yes http-server -p __PORT__ -c-1 ."
 
 if not defined SERVER_TEMPLATE (
-  echo Nenasel jsem Python ani Node.js (npx).
-  echo Nainstaluj Python 3 nebo Node.js a spust start.bat znovu.
+  echo Could not find Python or Node.js (npx).
+  echo Install Python 3 or Node.js and run start.bat again.
   pause
   exit /b 1
 )
@@ -35,11 +35,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 "  if(Wait-Server $testUrl 12000){ $selectedPort=$p; $server=$candidate; break }" ^
 "  if(-not $candidate.HasExited){ Stop-Process -Id $candidate.Id -Force -ErrorAction SilentlyContinue }" ^
 "}" ^
-"if(-not $selectedPort -or -not $server){ Write-Host 'Server se nepodarilo spustit na portech 8080/8081/8082.'; exit 2 }" ^
+"if(-not $selectedPort -or -not $server){ Write-Host 'Failed to start server on ports 8080/8081/8082.'; exit 2 }" ^
 "$url = 'http://localhost:' + $selectedPort + '/dj-visualizer.html';" ^
 "$chromeCandidates = @($env:ProgramFiles + '\\Google\\Chrome\\Application\\chrome.exe', ${env:ProgramFiles(x86)} + '\\Google\\Chrome\\Application\\chrome.exe', $env:LocalAppData + '\\Google\\Chrome\\Application\\chrome.exe');" ^
 "$chrome = $chromeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1;" ^
-"Write-Host ('Server bezi na ' + $url);" ^
+"Write-Host ('Server running at ' + $url);" ^
 "if ($chrome) {" ^
 "  $browser = $null;" ^
 "  if($env:TEMP -and (Test-Path $env:TEMP)){" ^
@@ -53,21 +53,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 "  Wait-Process -Id $browser.Id;" ^
 "} else {" ^
 "  Start-Process $url | Out-Null;" ^
-"  Write-Host 'Chrome nenalezen. Otevren vychozi prohlizec. Po testu zavri toto okno pro ukonceni serveru.';" ^
+"  Write-Host 'Chrome not found. Opening default browser. Close this window when done to stop the server.';" ^
 "  Read-Host | Out-Null;" ^
 "}" ^
 "if (-not $server.HasExited) { Stop-Process -Id $server.Id -Force }"
 
 if errorlevel 1 (
   echo.
-  echo Nepodarilo se provest PowerShell cast (mozna firemni policy).
-  echo Manualne otevri dj-visualizer.html pres localhost server:
+  echo Failed to run PowerShell part (possibly company policy).
+  echo Manually start the server and open dj-visualizer.html:
   if exist "%~dp0python-portable\python.exe" (
     echo   python-portable\python.exe -m http.server 8080
   ) else (
     echo   py -3 -m http.server 8080
   )
-  echo   a pak otevri http://localhost:8080/dj-visualizer.html
+  echo   then open http://localhost:8080/dj-visualizer.html
   pause
 )
 
