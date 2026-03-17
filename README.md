@@ -114,10 +114,6 @@ Grant permission for microphone / screen-share audio in your browser, then try a
 Try a different browser (Chrome is the most consistent for screen/tab audio capture).
 When sharing, ensure **audio sharing is enabled**.
 
-## Language
-
-The launcher scripts display messages in **Czech**. You can translate them by editing `start.bat` or `start.command`.
-
 ## Browser access
 
 The server is **localhost-only** and not exposed to the network (safe for USB gigs).
