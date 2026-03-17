@@ -19,10 +19,30 @@ is_ready() {
   curl -fsS --max-time 1 "$url" >/dev/null 2>&1
 }
 
+port_busy() {
+  local p="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -nP -iTCP:"${p}" -sTCP:LISTEN >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    if nc -z 127.0.0.1 "${p}" >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+  return 1
+}
+
 start_with_cmd() {
   local cmd="$1"
   local p
   for p in 8080 8081 8082; do
+    if port_busy "$p"; then
+      continue
+    fi
     URL="http://localhost:${p}/dj-visualizer.html"
     nohup bash -lc "${cmd/__PORT__/$p}" >"${LOG_FILE}" 2>&1 &
     SERVER_PID=$!
@@ -47,11 +67,11 @@ start_with_cmd() {
 }
 
 if command -v python3 >/dev/null 2>&1; then
-  start_with_cmd "python3 -m http.server __PORT__" || true
+  start_with_cmd "python3 -m http.server __PORT__ --bind 127.0.0.1" || true
 elif command -v python >/dev/null 2>&1; then
-  start_with_cmd "python -m http.server __PORT__" || true
+  start_with_cmd "python -m http.server __PORT__ --bind 127.0.0.1" || true
 elif command -v npx >/dev/null 2>&1; then
-  start_with_cmd "npx --yes http-server -p __PORT__ -c-1 ." || true
+  start_with_cmd "npx --yes http-server -p __PORT__ -a 127.0.0.1 -c-1 ." || true
 else
   echo "Could not find Python or Node.js (npx)."
   echo "Install Python 3 or Node.js and run start.command again."
@@ -66,12 +86,23 @@ fi
 echo "Server running at ${URL}"
 
 CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+EDGE_BIN="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+BROWSER_BIN=""
+BROWSER_NAME=""
 if [[ -x "${CHROME_BIN}" ]]; then
+  BROWSER_BIN="${CHROME_BIN}"
+  BROWSER_NAME="Chrome"
+elif [[ -x "${EDGE_BIN}" ]]; then
+  BROWSER_BIN="${EDGE_BIN}"
+  BROWSER_NAME="Edge"
+fi
+
+if [[ -n "${BROWSER_BIN}" ]]; then
   BROWSER_PID=""
   if [[ -n "${TMPDIR:-}" && -d "${TMPDIR}" && -w "${TMPDIR}" ]]; then
     PROFILE_DIR="${TMPDIR%/}/djviz-profile-$$"
     mkdir -p "${PROFILE_DIR}" || true
-    "${CHROME_BIN}" --new-window --user-data-dir="${PROFILE_DIR}" "${URL}" >/dev/null 2>&1 &
+    "${BROWSER_BIN}" --new-window --user-data-dir="${PROFILE_DIR}" "${URL}" >/dev/null 2>&1 &
     BROWSER_PID=$!
     sleep 0.4
     if ! kill -0 "$BROWSER_PID" 2>/dev/null; then
@@ -79,12 +110,12 @@ if [[ -x "${CHROME_BIN}" ]]; then
     fi
   fi
   if [[ -z "${BROWSER_PID}" ]]; then
-    "${CHROME_BIN}" --new-window "${URL}" >/dev/null 2>&1 &
-    BROWSER_PID=$!
+    "${BROWSER_BIN}" --new-window "${URL}" >/dev/null 2>&1 &
   fi
-  wait "${BROWSER_PID}" || true
+  echo "${BROWSER_NAME} opened."
+  read -r -p "Press Enter when done to stop the server..." _
 else
   open "${URL}"
-  echo "Chrome not found, opening default browser."
+  echo "Chrome/Edge not found, opening default browser."
   read -r -p "Press Enter when done to stop the server..." _
 fi

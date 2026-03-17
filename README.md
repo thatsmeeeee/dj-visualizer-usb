@@ -12,6 +12,8 @@ It starts a local web server and opens:
 - `start.bat` — Windows launcher (portable Python → system Python → Node)
 - `start.command` — macOS launcher (Python → Node)
 - `python-portable/` — bundled Python for Windows (if present)
+- `smoke_test.py` — quick local server smoke test
+- `RELEASE_CHECKLIST.md` — pre-gig validation checklist
 - `README.md`
 
 ## Quick start (Windows)
@@ -38,6 +40,7 @@ If it doesn't open, manually visit:
 If none are available, install **Python 3** or **Node.js**.
 
 If PowerShell execution is blocked by policy, the script prints a manual fallback command.
+If PowerShell is blocked, `start.bat` now auto-falls back to a CMD launch on `localhost:8080`.
 
 ## Quick start (macOS)
 
@@ -64,6 +67,7 @@ If it doesn't open, manually visit:
 So you need **Python 3** or **Node.js** installed.
 
 The launcher prefers **Chrome**. If not found, it falls back to your default browser.
+On both Windows and macOS, launchers now try **Chrome**, then **Edge**, then default browser.
 
 ## Using audio (MIC / SYSTEM / MIX)
 
@@ -82,6 +86,8 @@ To actually get audio, you usually must:
 - enable something like **"Share audio"** (wording depends on the browser/OS).
 
 If you deny permission, the app shows `AUDIO DENIED`.
+If you share screen/tab but audio is not included, the app shows `NO SYSTEM AUDIO`.
+If shared system audio stops mid-session, the app shows `SYSTEM AUDIO ENDED`.
 
 ## Controls
 
@@ -90,11 +96,25 @@ Move the mouse to reveal the UI panel.
 Hotkeys:
 - `Space` — Start / Stop
 - `A` — Audio source (MIC / SYSTEM / MIX)
+- `P` — Preset (CLUB / OPEN AIR / LOW POWER)
 - `M` — Mode
 - `C` — Color mode
+- `Q` — Quality mode (AUTO / HIGH / MED / LOW)
+- `T` — Toggle tuning panel
 - `S` — Strobe toggle
 - `F` — Fullscreen
 - `G` — Debug overlay (FPS, audio levels)
+
+## Presets and tuning
+
+- **CLUB** — balanced default for indoor DJ setup.
+- **OPEN AIR** — more stable beat response for spacious/less compressed audio.
+- **LOW POWER** — safer defaults for weaker laptops.
+
+Use **TUNE** panel for live adjustments:
+- **SENSITIVITY** — how easily flashes react to signal changes.
+- **FLASH RATE** — overall flash intensity/rate scaling.
+- **SAFETY** — stricter/looser limiter behavior.
 
 ## Safety warning (strobe / flashes)
 
@@ -110,6 +130,12 @@ Something is already using those ports. Close the other process, or edit the lau
 ### "AUDIO DENIED"
 Grant permission for microphone / screen-share audio in your browser, then try again.
 
+### "NO SYSTEM AUDIO"
+Start again in `SYSTEM` or `MIX` mode and make sure **Share audio** is enabled in the browser share dialog.
+
+### "SYSTEM AUDIO ENDED"
+Your screen-share audio track was stopped. Start audio again and re-share with audio enabled.
+
 ### No system audio captured
 Try a different browser (Chrome is the most consistent for screen/tab audio capture).
 When sharing, ensure **audio sharing is enabled**.
@@ -117,6 +143,27 @@ When sharing, ensure **audio sharing is enabled**.
 ## Browser access
 
 The server is **localhost-only** and not exposed to the network (safe for USB gigs).
+
+## Quick smoke test
+
+After launching, run:
+
+```bash
+python3 smoke_test.py
+```
+
+Expected result: `OK http://127.0.0.1:8080/dj-visualizer.html (...)` (or 8081/8082).
+
+## Test matrix
+
+See [TEST_MATRIX.md](TEST_MATRIX.md) for automated and manual test scenarios.
+
+## USB Reality (Important)
+
+- USB auto-run is commonly blocked by OS security policy. Plan for manual launcher click.
+- On Windows, SmartScreen may warn on first run.
+- On macOS, Gatekeeper may require right-click -> Open on first launch.
+- Screen/system-audio capture always requires an explicit user permission step in the browser.
 
 ## License
 
