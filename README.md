@@ -116,6 +116,20 @@ Use **TUNE** panel for live adjustments:
 - **FLASH RATE** — overall flash intensity/rate scaling.
 - **SAFETY** — stricter/looser limiter behavior.
 
+## Music-structure aware behavior
+
+The visualizer now uses lightweight music-theory features on top of beat detection:
+
+- **Meter/downbeat tracking** (`1..4`) from beat accent history.
+- **Phrase tracking** (8-bar cycle) for stronger phrase-boundary accents.
+- **Key estimate** (12-chroma + major/minor templates) with confidence.
+- **Harmonic tension** estimate used to shape flash intensity and hue motion.
+
+Practical effect:
+- stronger flash/strobe on likely downbeats,
+- phrase starts hit harder,
+- less random feel vs pure instantaneous peak reaction.
+
 ## Safety warning (strobe / flashes)
 
 This visualizer can produce rapid flashes (strobe/whiteouts).

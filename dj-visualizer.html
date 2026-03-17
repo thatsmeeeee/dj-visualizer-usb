@@ -482,12 +482,24 @@ const state = {
   bpmConfidence: 0,
   lastBpmAt: 0,
   beatCounter: 0,
+  musicalBeatCounter: 0,
   beatDivIndex: 2,
   beatDivisions: [1,2,4],
   beatPeriodSec: 0.5,
   nextBeatAt: 0,
   beatPhaseConfidence: 0,
   beatPhaseTriggerNow: false,
+  meterBeats: 4,
+  beatInBar: 1,
+  downbeatOffset: 0,
+  downbeatConfidence: 0,
+  beatAccentHistory: new Array(32).fill(0.25),
+  beatAccentHistIndex: 0,
+  barCounter: 0,
+  phraseBars: 8,
+  phraseBarIndex: 0,
+  phraseProgress: 0,
+  phraseBoundaryPulse: 0,
 
   mode: 7, // 0=particles 1=tunnel 2=grid 3=chaos 4=vortex 5=pulse 6=shatter 7=all
   modeNames: ['PARTICLES','TUNNEL','GRID','CHAOS','VORTEX','PULSE','SHATTER','ALL'],
@@ -544,6 +556,12 @@ const state = {
   sectionIntensityMul: 1,
   dropImpactFrames: 0,
   tonalHue: 180,
+  chroma12: new Array(12).fill(0),
+  keyIndex: -1,
+  keyMode: 'minor',
+  keyConfidence: 0,
+  harmonicTension: 0,
+  tonalStability: 0,
   silenceSignal: 0,
   grooveSignal: 0,
   buildupSignal: 0,
@@ -697,6 +715,66 @@ const el = {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
+}
+
+const KEY_TEMPLATE_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const KEY_TEMPLATE_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+const NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const CIRCLE_OF_FIFTHS_INDEX = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+
+function dot12(a, b, shift = 0) {
+  let s = 0;
+  for (let i = 0; i < 12; i++) {
+    s += a[(i + shift) % 12] * b[i];
+  }
+  return s;
+}
+
+function normalize12(v) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += v[i];
+  if (sum <= 1e-6) return new Array(12).fill(0);
+  const out = new Array(12);
+  for (let i = 0; i < 12; i++) out[i] = v[i] / sum;
+  return out;
+}
+
+function estimateKeyFromChroma(chroma) {
+  let best = -1;
+  let second = -1;
+  let bestRoot = 0;
+  let bestMode = 'major';
+
+  for (let root = 0; root < 12; root++) {
+    const majorScore = dot12(chroma, KEY_TEMPLATE_MAJOR, root);
+    if (majorScore > best) {
+      second = best;
+      best = majorScore;
+      bestRoot = root;
+      bestMode = 'major';
+    } else if (majorScore > second) {
+      second = majorScore;
+    }
+
+    const minorScore = dot12(chroma, KEY_TEMPLATE_MINOR, root);
+    if (minorScore > best) {
+      second = best;
+      best = minorScore;
+      bestRoot = root;
+      bestMode = 'minor';
+    } else if (minorScore > second) {
+      second = minorScore;
+    }
+  }
+
+  const conf = clamp((best - Math.max(0, second)) / Math.max(1e-3, best), 0, 1);
+  return { root: bestRoot, mode: bestMode, confidence: conf };
+}
+
+function keyRootToHue(root) {
+  const idx = CIRCLE_OF_FIFTHS_INDEX.indexOf(root);
+  const step = idx >= 0 ? idx : root;
+  return (step * 30) % 360;
 }
 
 function setStatusOverride(text, durationMs = 1800) {
@@ -954,6 +1032,50 @@ function canBeatPhaseTrigger(nowSec, lookAheadSec = 0.02) {
   return state.beatPhaseConfidence > 0.4 && nowSec >= (state.nextBeatAt - lookAheadSec);
 }
 
+function updateMusicalMeter(accent) {
+  state.beatAccentHistory[state.beatAccentHistIndex] = clamp(accent, 0, 2.5);
+  state.beatAccentHistIndex = (state.beatAccentHistIndex + 1) % state.beatAccentHistory.length;
+
+  const beatsSeen = Math.min(state.musicalBeatCounter + 1, state.beatAccentHistory.length);
+  if (beatsSeen >= 12) {
+    const scores = [0, 0, 0, 0];
+    for (let i = 0; i < beatsSeen; i++) {
+      const idx = (state.beatAccentHistIndex - 1 - i + state.beatAccentHistory.length) % state.beatAccentHistory.length;
+      const beatNum = state.musicalBeatCounter - i;
+      const slot = ((beatNum % 4) + 4) % 4;
+      scores[slot] += state.beatAccentHistory[idx];
+    }
+    let best = 0;
+    let second = 0;
+    for (let i = 1; i < 4; i++) {
+      if (scores[i] > scores[best]) best = i;
+    }
+    for (let i = 0; i < 4; i++) {
+      if (i === best) continue;
+      if (scores[i] > scores[second] || second === best) second = i;
+    }
+    state.downbeatOffset = best;
+    const total = scores[0] + scores[1] + scores[2] + scores[3];
+    const margin = scores[best] - scores[second];
+    state.downbeatConfidence = clamp(margin / Math.max(0.001, total * 0.55), 0, 1);
+  } else {
+    state.downbeatOffset = state.musicalBeatCounter % 4;
+    state.downbeatConfidence = 0.2;
+  }
+
+  const beatInBar0 = ((state.musicalBeatCounter - state.downbeatOffset) % 4 + 4) % 4;
+  state.beatInBar = beatInBar0 + 1;
+  if (state.beatInBar === 1) {
+    state.barCounter += 1;
+    state.phraseBarIndex = ((state.barCounter - 1) % state.phraseBars + state.phraseBars) % state.phraseBars;
+    state.phraseBoundaryPulse = state.phraseBarIndex === 0 ? 1 : Math.max(0, state.phraseBoundaryPulse * 0.6);
+  } else {
+    state.phraseBoundaryPulse *= 0.92;
+  }
+  state.phraseProgress = clamp((state.phraseBarIndex + (state.beatInBar - 1) / 4) / Math.max(1, state.phraseBars), 0, 1);
+  state.musicalBeatCounter += 1;
+}
+
 function updateMusicState(now, detectorState = null) {
   if (state.warmupFrames > 0) {
     state.warmupFrames--;
@@ -1097,14 +1219,37 @@ function getFlashHotScore() {
   const subN = clamp(((state.subBass * sens) - 0.10) / 0.75, 0, 1);
   const intensityN = clamp((state.intensity - 0.65) / 2.25, 0, 1);
   const bpmConfN = clamp((state.bpmConfidence - 0.15) / 0.85, 0, 1);
-  return clamp(energyN * 0.38 + subN * 0.34 + intensityN * 0.18 + bpmConfN * 0.10, 0, 1);
+  const phraseN = clamp(state.phraseBoundaryPulse, 0, 1);
+  const tensionN = clamp(state.harmonicTension, 0, 1);
+  return clamp(
+    energyN * 0.33 +
+    subN * 0.30 +
+    intensityN * 0.17 +
+    bpmConfN * 0.10 +
+    phraseN * 0.06 +
+    tensionN * 0.04,
+    0,
+    1
+  );
+}
+
+function getMusicalAccentStrength() {
+  const downbeat = state.beatInBar === 1 ? 1 : 0;
+  const boundary = clamp(state.phraseBoundaryPulse, 0, 1);
+  const buildLift = clamp(state.fluxTrend * 0.18, 0, 0.35);
+  const releaseLift = clamp((state.subBassSmooth - 0.42) * 1.2, 0, 0.35);
+  const downbeatLift = downbeat * (0.18 + 0.24 * state.downbeatConfidence);
+  return clamp(1 + downbeatLift + boundary * 0.28 + buildLift + releaseLift, 0.75, 1.85);
 }
 
 function getFlashBudget() {
   const hot = getFlashHotScore();
   const subBoost = state.subBass > 0.62 ? 1 : 0;
   const tempoBoost = state.bpmConfidence > 0.45 ? 1 : 0;
-  const bySignal = Math.round(1 + hot * 8) + subBoost + tempoBoost; // 1..11
+  const downbeatBoost = state.beatInBar === 1 ? 1 : 0;
+  const phraseBoost = state.phraseBoundaryPulse > 0.62 ? 1 : 0;
+  const betweenThrottle = (state.beatInBar !== 1 && hot < 0.55 && state.harmonicTension < 0.35) ? -1 : 0;
+  const bySignal = Math.round(1 + hot * 8) + subBoost + tempoBoost + downbeatBoost + phraseBoost + betweenThrottle;
   const hardCap = Math.max(2, Math.floor((state.maxStrobeHz || 10) * state.tuneFlashRate));
   return clamp(bySignal, 1, hardCap);
 }
@@ -1258,6 +1403,8 @@ const MainController = {
       `bassSpike: ${BeatEngine.metrics.bassSpike.toFixed(3)}  bassZ: ${BeatEngine.metrics.bassZ.toFixed(2)}`,
       `fluxZ: ${BeatEngine.metrics.fluxZ.toFixed(2)}  build: ${BeatEngine.metrics.build.toFixed(2)}  drop: ${BeatEngine.metrics.drop.toFixed(2)}`,
       `beatETA: ${(state.nextBeatAt - nowSec).toFixed(3)}s  beatPhaseConf: ${state.beatPhaseConfidence.toFixed(2)}`,
+      `meter: ${state.beatInBar}/${state.meterBeats}  downbeatConf: ${state.downbeatConfidence.toFixed(2)}  phrase: ${(state.phraseProgress*100).toFixed(0)}%`,
+      `key: ${state.keyIndex >= 0 ? NOTE_NAMES[state.keyIndex] : '?'} ${state.keyMode}  keyConf: ${state.keyConfidence.toFixed(2)}  harmTension: ${state.harmonicTension.toFixed(2)}`,
       `RMS: ${BeatEngine.metrics.rms.toFixed(3)}`,
       `BPM: ${Math.round(state.bpmSmooth) || '--'}  conf=${Math.round(state.bpmConfidence*100)}%`,
       `fps: ${state.fpsEma.toFixed(1)}  hz: ${(1000/Math.max(4,state.refreshEmaMs)).toFixed(0)}  quality: ${state.qualityAuto ? 'AUTO' : state.qualityNames[state.qualityLevel]}  scale: ${state.renderScale.toFixed(2)}`,
@@ -1494,6 +1641,16 @@ async function stopAudio() {
   state.nextBeatAt = 0;
   state.beatPhaseConfidence = 0;
   state.beatPhaseTriggerNow = false;
+  state.musicalBeatCounter = 0;
+  state.beatInBar = 1;
+  state.downbeatOffset = 0;
+  state.downbeatConfidence = 0;
+  state.beatAccentHistory.fill(0.25);
+  state.beatAccentHistIndex = 0;
+  state.barCounter = 0;
+  state.phraseBarIndex = 0;
+  state.phraseProgress = 0;
+  state.phraseBoundaryPulse = 0;
   state.lastBeatTimeSec = 0;
   state.lastStateSwitchSec = 0;
   state.spectralFlux = 0;
@@ -1503,6 +1660,12 @@ async function stopAudio() {
   state.fluxTrend = 0;
   state.bassSpike = 0;
   state.buildActive = false;
+  state.chroma12.fill(0);
+  state.keyIndex = -1;
+  state.keyMode = 'minor';
+  state.keyConfidence = 0;
+  state.harmonicTension = 0;
+  state.tonalStability = 0;
 
   el.status.textContent = '● STANDBY';
   el.btnStart.textContent = sourceStartLabel();
@@ -1536,6 +1699,43 @@ function analyzeAudio() {
   const rawMid    = (midSum  / Math.max(1, mid1 - mid0 + 1)) / 255;
   const rawHigh   = (highSum / Math.max(1, hi1 - hi0 + 1)) / 255;
   const rawEnergy = rawSub*0.35 + rawBass*0.35 + rawMid*0.2 + rawHigh*0.1;
+
+  // ── Chroma pitch classes (12-bin) for tonal context ──────────────────────
+  const chromaRaw = new Array(12).fill(0);
+  const hzPerBin = (state.audioCtx.sampleRate * 0.5) / Math.max(1, state.bufferLen);
+  for (let i = 1; i <= hi1; i++) {
+    const amp = (state.dataArray[i] || 0) / 255;
+    if (amp < 0.02) continue;
+    const hz = i * hzPerBin;
+    if (hz < 55 || hz > 5000) continue;
+    const midi = 69 + 12 * Math.log2(hz / 440);
+    const pc = ((Math.round(midi) % 12) + 12) % 12;
+    chromaRaw[pc] += Math.pow(amp, 1.25);
+  }
+  const chromaNorm = normalize12(chromaRaw);
+  for (let i = 0; i < 12; i++) {
+    state.chroma12[i] = state.chroma12[i] * 0.88 + chromaNorm[i] * 0.12;
+  }
+  const keyEst = estimateKeyFromChroma(state.chroma12);
+  state.keyIndex = keyEst.root;
+  state.keyMode = keyEst.mode;
+  state.keyConfidence += (keyEst.confidence - state.keyConfidence) * 0.12;
+
+  let top1 = 0;
+  let top2 = 0;
+  for (let i = 0; i < 12; i++) {
+    const v = state.chroma12[i];
+    if (v > top1) {
+      top2 = top1;
+      top1 = v;
+    } else if (v > top2) {
+      top2 = v;
+    }
+  }
+  const chromaFocus = clamp((top1 - top2) / Math.max(0.001, top1 + top2), 0, 1);
+  state.tonalStability += (chromaFocus - state.tonalStability) * 0.08;
+  const atonal = 1 - state.tonalStability;
+  state.harmonicTension += ((0.65 * atonal + 0.35 * clamp(rawHigh - rawMid * 0.6, 0, 1)) - state.harmonicTension) * 0.1;
 
   // ── RMS ──────────────────────────────────────────────────────────────────
   let rmsAccum = 0;
@@ -1645,7 +1845,7 @@ function analyzeAudio() {
   const subKick         = state.subBass > 0.08;
   state.beatDetected    = energyDeltaBeat && subKick && cooldownOk;
 
-  // ── Spectral centroid → tonal hue ─────────────────────────────────────────
+  // ── Spectral centroid + key estimate → tonal hue ──────────────────────────
   let centroidW=0, centroidS=0;
   for (let i=1; i<=hi1; i++) {
     const v = state.dataArray[i] / 255;
@@ -1653,7 +1853,11 @@ function analyzeAudio() {
     centroidW += i * v;
   }
   const centroidNorm = centroidS > 0 ? (centroidW / centroidS) / Math.max(1, hi1) : 0.5;
-  state.tonalHue = lerpHue(state.tonalHue, (30 + centroidNorm * 300) % 360, 0.08);
+  const centroidHue = (30 + centroidNorm * 300) % 360;
+  const keyHue = keyRootToHue(state.keyIndex >= 0 ? state.keyIndex : 0);
+  const keyBlend = clamp(state.keyConfidence * 0.8, 0, 0.8);
+  const targetHue = ((1 - keyBlend) * centroidHue) + (keyBlend * keyHue);
+  state.tonalHue = lerpHue(state.tonalHue, targetHue % 360, 0.08);
 
   // ── Silence gate ──────────────────────────────────────────────────────────
   const silenceGate = state.energy < (avgEnergy * 0.55);
@@ -1710,6 +1914,13 @@ function analyzeAudio() {
   if (state.beatDetected) {
     state.beatCounter += 1;
     state.beatPhaseTriggerNow = canBeatPhaseTrigger(nowSec, 0.02);
+    const accent = (
+      state.subBassSmooth * 1.3 +
+      state.energySmooth * 0.7 +
+      clamp((state.energy - prevFast) * 2.3, 0, 1) * 0.8 +
+      highFluxNorm * 0.6
+    );
+    updateMusicalMeter(accent);
 
     if (state.lastBeatTime > 0) {
       const interval = now - state.lastBeatTime;
@@ -1776,7 +1987,8 @@ function analyzeAudio() {
 
     const highGate = clamp((state.highSmooth - 0.05) / 0.26, 0, 1);
     if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && state.strobeMode === 2) {
-      state.hardStrobeFrames = 2;
+      const downbeatBoost = state.beatInBar === 1 ? 1 : 0;
+      state.hardStrobeFrames = 1 + downbeatBoost + (state.phraseBoundaryPulse > 0.7 ? 1 : 0);
     } else if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && state.strobeMode === 0 && highGate > 0.02) {
       triggerStrobePulse(0.95 + highGate * 0.95, now);
     }
@@ -1787,6 +1999,7 @@ function analyzeAudio() {
   } else {
     state.beatPhaseTriggerNow = false;
     state.beatPhaseConfidence = Math.max(0, state.beatPhaseConfidence - 0.002);
+    state.phraseBoundaryPulse *= 0.985;
   }
 
   state.rms          = rawRms;
@@ -1840,27 +2053,40 @@ function onBeat() {
   const beatFlashConfidence = 0.3 + state.bpmConfidence * 0.7;
   const beatPhaseOk = state.beatPhaseTriggerNow;
   const hotScore = getFlashHotScore();
-  const hotSignal = hotScore > 0.50;
+  const hotSignal = hotScore > 0.46;
+  const downbeat = state.beatInBar === 1;
+  const weakBeatGate = hotScore > 0.32 || (downbeat && state.downbeatConfidence > 0.35);
   const hotBeatFlashAllowed = state.strobeEnabled
     && beatPhaseOk
     && state.bpmConfidence >= 0.18
     && hotSignal
     && SafetyLimiter.allowFlash(now, true);
   const beatFlashAllowed = hotBeatFlashAllowed
-    || (state.strobeEnabled && beatPhaseOk && state.bpmConfidence >= 0.2 && canTriggerFlashEvent(now));
+    || (
+      state.strobeEnabled &&
+      beatPhaseOk &&
+      state.bpmConfidence >= 0.2 &&
+      weakBeatGate &&
+      canTriggerFlashEvent(now)
+    );
   state.beatPulse = 1.0;
   state.flashColorPhase = !state.flashColorPhase;
   const signalBoost = 1 + clamp((hotScore - 0.45) * 1.6, 0, 0.6);
-  const i = state.intensity * state.sectionIntensityMul * signalBoost;
+  const musicalAccent = getMusicalAccentStrength();
+  const i = state.intensity * state.sectionIntensityMul * signalBoost * musicalAccent;
   // Flash
   if (beatFlashAllowed) {
-    state.flashOpacity = Math.min(2.8, (0.9 + state.subBass * 1.8 * i) * rage * (0.75 + live * 1.05) * beatFlashConfidence);
+    const downbeatBoost = downbeat ? (1 + 0.18 + state.downbeatConfidence * 0.24) : 1;
+    const phraseBoost = 1 + state.phraseBoundaryPulse * 0.22;
+    const energyPulse = hotScore > 0.68 ? 1.12 : 1;
+    state.flashOpacity = Math.min(2.8, (0.8 + state.subBass * 1.7 * i) * rage * (0.75 + live * 1.05) * beatFlashConfidence * downbeatBoost * phraseBoost * energyPulse);
     SafetyLimiter.recordFlash(now);
   } else {
-    state.flashOpacity = Math.min(state.flashOpacity, 0.04);
+    state.flashOpacity = Math.min(state.flashOpacity, 0.02);
   }
-  if ((hotScore > 0.62) && (state.subBass > 0.7 || state.energy > 0.65) && beatFlashAllowed) {
-    state.overdriveWhite = Math.min(1.6, 0.5 + state.subBass * 1.05 * i + state.energyAccumulator * 0.6);
+  if ((hotScore > 0.58) && (state.subBass > 0.68 || state.energy > 0.62) && beatFlashAllowed) {
+    const tensionBoost = 1 + state.harmonicTension * 0.35;
+    state.overdriveWhite = Math.min(1.6, (0.42 + state.subBass * 0.95 * i + state.energyAccumulator * 0.55) * tensionBoost);
   }
 
   // Spawn particles burst
@@ -1872,7 +2098,8 @@ function onBeat() {
   ) spawnBurst(24 + Math.floor(state.subBass * 92 * live * i));
   // Color wash
   state.washOpacity = Math.min(1.2, (0.5 + state.bass * 1.25 * i) * (0.7 + live * 0.9));
-  const hueStep = state.colorMode === 2 ? 18 : state.colorMode === 3 ? 28 : 47;
+  const hueStepBase = state.colorMode === 2 ? 18 : state.colorMode === 3 ? 28 : 47;
+  const hueStep = hueStepBase * (0.85 + state.harmonicTension * 0.4);
   state.washHue = (state.washHue + hueStep) % 360;
   // Global pulse kick
   state.impactPulse = Math.min(2, (0.95 + state.subBassSmooth * 2.5 * i) * rage * (0.8 + live * 0.9));
@@ -1886,7 +2113,7 @@ function onBeat() {
   if (state.mode === 5 || (state.mode === 7 && state.allCurrentMode === 5)) {
     const quiet = hotScore < 0.35;
     const intense = hotScore > 0.68;
-    const count = quiet ? 1 : intense ? 4 : 2;
+    const count = quiet ? 1 : intense ? (downbeat ? 4 : 3) : (downbeat ? 3 : 2);
     for (let n=0; n<count; n++) {
       const band = intense ? (n % 3) : (state.subBassSmooth > state.highSmooth ? 0 : 1 + (n % 2));
       spawnPulseWave(band, intense ? (1 + Math.random() * 0.65) : (0.9 + Math.random() * 0.35));
@@ -2894,10 +3121,14 @@ function updateMeters() {
   // BPM in status
   if (performance.now() < state.statusOverrideUntilMs) return;
   const pName = state.presets[state.presetIndex].name;
+  const meterTag = `B${state.beatInBar}/${state.meterBeats}`;
+  const keyTag = state.keyConfidence > 0.35 && state.keyIndex >= 0
+    ? `${NOTE_NAMES[state.keyIndex]}${state.keyMode === 'minor' ? 'm' : ''}`
+    : '--';
   if (hasRecentBpm) {
-    el.status.textContent = `● LIVE  ${Math.round(state.bpmSmooth)} BPM  C${Math.round(state.bpmConfidence*100)}%  ${state.musicState}  ${pName}`;
+    el.status.textContent = `● LIVE  ${Math.round(state.bpmSmooth)} BPM  C${Math.round(state.bpmConfidence*100)}%  ${meterTag}  ${keyTag}  ${state.musicState}  ${pName}`;
   } else {
-    el.status.textContent = `● LIVE  ${state.musicState}  ${pName}`;
+    el.status.textContent = `● LIVE  ${meterTag}  ${keyTag}  ${state.musicState}  ${pName}`;
   }
 }
 
