@@ -1,0 +1,2757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VISUALS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bass: 0;
+    --mid: 0;
+    --high: 0;
+    --energy: 0;
+  }
+
+  body {
+    background: #000;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Space Mono', monospace;
+    cursor: none;
+  }
+
+  body.ui-visible { cursor: default; }
+
+  /* ── CANVAS ── */
+  #canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ── OVERLAY GRID LINES ── */
+  #grid {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    z-index: 1;
+    transition: opacity 0.5s;
+  }
+
+  /* ── SCANLINES ── */
+  #scanlines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    z-index: 2;
+  }
+
+  /* ── VIGNETTE ── */
+  #vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+    z-index: 3;
+  }
+
+  /* ── FLASH OVERLAY ── */
+  #flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: #fff;
+    opacity: 0;
+    z-index: 10;
+    mix-blend-mode: screen;
+  }
+
+  /* ── STROBE OVERLAY ── */
+  #strobe {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: #fff;
+    opacity: 0;
+    z-index: 11;
+    mix-blend-mode: screen;
+  }
+
+  /* ── COLOR WASH ── */
+  #wash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 4;
+    mix-blend-mode: color;
+    transition: background 0.1s;
+  }
+
+  /* ── UI PANEL ── */
+  #ui {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 100;
+    background: transparent;
+    border-top: 1px solid rgba(0,240,255,0.28);
+    box-shadow: 0 -8px 20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(0,240,255,0.08);
+    opacity: 0;
+    transition: opacity 0.28s;
+  }
+  #ui.visible { opacity: 1; }
+
+  .btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px;
+    letter-spacing: 2px;
+    padding: 8px 16px;
+    min-height: 38px;
+    border: 1px solid rgba(255,255,255,0.22);
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.9);
+    cursor: pointer;
+    border-radius: 0;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    box-shadow: none;
+  }
+  .btn:hover {
+    background: rgba(0,240,255,0.08);
+    border-color: rgba(0,240,255,0.78);
+    color: #e9feff;
+  }
+  .btn.active {
+    background: rgba(0,240,255,0.12);
+    border-color: rgba(0,240,255,0.95);
+    color: #eaffff;
+  }
+  .btn.danger { border-color: rgba(255,80,80,0.65); color: rgba(255,120,120,1); }
+  .btn.danger:hover { background: rgba(255,50,50,0.15); border-color: rgba(255,90,90,0.9); }
+
+  #status {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(210,255,255,0.84);
+    margin-left: auto;
+    letter-spacing: 1.5px;
+    padding: 7px 10px;
+    border-radius: 0;
+    border: 1px solid rgba(0,240,255,0.34);
+    background: rgba(0,240,255,0.06);
+  }
+
+  .sep {
+    width: 1px;
+    height: 26px;
+    background: rgba(0,240,255,0.36);
+    box-shadow: none;
+  }
+
+  /* ── LEVEL METERS ── */
+  #meters {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    padding: 7px 9px;
+    border-radius: 0;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-top-color: rgba(0,240,255,0.4);
+    background: rgba(0,0,0,0.52);
+    transition: opacity 0.4s;
+  }
+  #meters.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .meter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .meter-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.35);
+    width: 28px;
+    text-align: right;
+  }
+  .meter-bar {
+    width: 80px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.05s;
+  }
+  #m-bass .meter-fill { background: #ff3030; }
+  #m-mid .meter-fill  { background: #00e5ff; }
+  #m-high .meter-fill { background: #aaff00; }
+  #m-bpm .meter-fill  { background: #ff4dff; }
+
+  .meter-value {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.55);
+    width: 38px;
+    text-align: left;
+  }
+
+  #energy-state {
+    width: 62px;
+    color: rgba(255,255,255,0.72);
+  }
+
+  /* ── MODE LABEL ── */
+  #mode-label {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: rgba(225,255,255,0.88);
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(0,240,255,0.3);
+    padding: 6px 10px;
+    border-radius: 0;
+    text-shadow: 0 0 10px rgba(0,240,255,0.22);
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  #mode-label.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* ── SONG SECTION LABEL ── */
+  #section-label {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.52);
+    z-index: 105;
+    pointer-events: none;
+  }
+
+  /* ── DEBUG OVERLAY ── */
+  #debug {
+    position: fixed;
+    left: 14px;
+    bottom: 96px;
+    z-index: 130;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    line-height: 1.35;
+    letter-spacing: 0.4px;
+    color: rgba(255,255,255,0.9);
+    background: rgba(0,0,0,0.62);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 10px 12px;
+    white-space: pre;
+    display: none;
+    pointer-events: none;
+  }
+  #debug.visible { display: block; }
+
+  /* ── IDLE MESSAGE ── */
+  #idle {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 1s;
+  }
+  #idle.hidden { opacity: 0; }
+
+  #idle h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(60px, 12vw, 120px);
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.06);
+    line-height: 1;
+  }
+  #idle p {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.2);
+    margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<div id="grid"></div>
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="strobe"></div>
+<div id="wash"></div>
+
+<div id="idle">
+  <h1>VISUALS</h1>
+  <p>CLICK TO START — MOVE MOUSE FOR CONTROLS</p>
+</div>
+
+<div id="mode-label">MODE: INIT</div>
+<div id="section-label">SECTION: GROOVE</div>
+<div id="debug"></div>
+
+<div id="meters">
+  <div class="meter-row" id="m-bass">
+    <span class="meter-label">BASS</span>
+    <div class="meter-bar"><div class="meter-fill"></div></div>
+  </div>
+  <div class="meter-row" id="m-mid">
+    <span class="meter-label">MID</span>
+    <div class="meter-bar"><div class="meter-fill"></div></div>
+  </div>
+  <div class="meter-row" id="m-high">
+    <span class="meter-label">HI</span>
+    <div class="meter-bar"><div class="meter-fill"></div></div>
+  </div>
+  <div class="meter-row" id="m-bpm">
+    <span class="meter-label">BPM</span>
+    <div class="meter-bar"><div class="meter-fill"></div></div>
+    <span class="meter-value" id="bpm-value">--</span>
+    <span class="meter-value" id="energy-state">GROOVE</span>
+  </div>
+</div>
+
+<div id="ui">
+  <button class="btn" id="btn-start">▶ START SYSTEM</button>
+  <button class="btn" id="btn-source">SOURCE: SYSTEM</button>
+  <div class="sep"></div>
+  <button class="btn" id="btn-mode">MODE: ALL</button>
+  <button class="btn" id="btn-color">COLOR: MONO</button>
+  <button class="btn active danger" id="btn-strobe">STROBE: ON</button>
+  <button class="btn" id="btn-fs">⛶ FULLSCREEN</button>
+  <div class="sep"></div>
+  <span id="status">● STANDBY</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+const state = {
+  running: false,
+  audioCtx: null,
+  analyser: null,
+  analysisTimer: null,
+  analysisHz: 100,
+  sourceNodes: [],
+  mediaStreams: [],
+  dataArray: null,
+  prevFreqArray: null,
+  waveArray: null,
+  bufferLen: 0,
+  bandBins: { sub:[0,0], bass:[0,0], mid:[0,0], hi:[0,0] },
+  dropDetector: null,
+
+  subBass: 0, bass: 0, mid: 0, high: 0, energy: 0,
+  subBassSmooth: 0, bassSmooth: 0, midSmooth: 0, highSmooth: 0, energySmooth: 0,
+
+  // Audio source routing
+  sourceMode: 1, // 0=mic 1=system 2=mix
+  sourceNames: ['MIC','SYSTEM','MIX'],
+
+  // Adaptive gain normalization
+  targetEnergy: 0.22,
+  dynamicGain: 1,
+  gainMin: 0.65,
+  gainMax: 2.8,
+  energyHistory: new Array(120).fill(0.05),
+  energyHistIndex: 0,
+  energyHistSum: 0.05 * 120,
+  fluxHistory: new Array(48).fill(0.01),
+  fluxHistIndex: 0,
+  fluxHistSum: 0.01 * 48,
+  bassFluxHistory: new Array(48).fill(0.01),
+  bassFluxHistIndex: 0,
+  bassFluxHistSum: 0.01 * 48,
+  highFluxHistory: new Array(48).fill(0.01),
+  highFluxHistIndex: 0,
+  highFluxHistSum: 0.01 * 48,
+  strongScoreHistory: new Array(48).fill(0.01),
+  strongScoreHistIndex: 0,
+  strongScoreHistSum: 0.01 * 48,
+
+  beatDetected: false,
+  beatThreshold: 1.28,
+  beatHistory: new Array(30).fill(0),
+  lastBeatTime: 0,
+  lastBeatTimeSec: 0,
+  bpm: 0,
+  beatTimes: [],
+  bpmSmooth: 0,
+  bpmConfidence: 0,
+  lastBpmAt: 0,
+  beatCounter: 0,
+  beatDivIndex: 2,
+  beatDivisions: [1,2,4],
+  beatPeriodSec: 0.5,
+  nextBeatAt: 0,
+  beatPhaseConfidence: 0,
+  beatPhaseTriggerNow: false,
+
+  mode: 7, // 0=particles 1=tunnel 2=grid 3=chaos 4=vortex 5=pulse 6=shatter 7=all
+  modeNames: ['PARTICLES','TUNNEL','GRID','CHAOS','VORTEX','PULSE','SHATTER','ALL'],
+  allCurrentMode: 0,
+  allSwitchElapsedMs: 0,
+  allSwitchIntervalMs: 900,
+  colorMode: 0, // 0=mono 1=spectrum 2=fire 3=acid
+  colorNames: ['MONO','SPECTRUM','FIRE','ACID'],
+  strobeEnabled: true,
+  strobeMode: 2, // 0=soft 1=sync 2=hard
+  strobeModeNames: ['SOFT','SYNC','HARD'],
+  strobeOpacity: 0,
+  strobePulseUntil: 0,
+  strobePulseMs: 140,
+  nextStrobeAt: 0,
+  lastStrobeHit: 0,
+  lastMicroFlashAt: 0,
+  hardStrobeFrames: 0,
+  microFlashOpacity: 0,
+  prevHighSmooth: 0,
+  intensity: 1,
+  overdriveWhite: 0,
+  energyAccumulator: 0,
+  floodFrames: 0,
+  floodHue: 0,
+  dynamicBeatThreshold: 1.25,
+  autoBlackoutFrames: 0,
+  autoWhiteoutFrames: 0,
+  whiteoutDecay: 0,
+  lowEnergyMs: 0,
+  lastWhiteoutAt: 0,
+  flashBudget: { IDLE: 0, GROOVE: 3, BUILD: 6, DROP: 11, BREAKDOWN: 2 },
+
+  // Tuning preset (single CLUB config)
+  presetIndex: 0,
+  presets: [
+    { name: 'CLUB', fftSize: 2048, smoothing: 0.55, beatK: 1.35, highK: 1.75, beatCooldownMs: 120, bpmConfidenceMin: 0.25, maxStrobeHz: 10.0 },
+  ],
+  beatK: 1.35,
+  highK: 1.75,
+  beatCooldownMs: 120,
+  bpmConfidenceMin: 0.25,
+  maxStrobeHz: 10.0,
+
+  // Music states
+  musicState: 'GROOVE', // CHILL | GROOVE | BUILD | DROP
+  sectionLastSwitchAt: 0,
+  sectionMinHoldMs: 2500,
+  sectionIntensityMul: 1,
+  dropImpactFrames: 0,
+  tonalHue: 180,
+  silenceSignal: 0,
+  grooveSignal: 0,
+  buildupSignal: 0,
+  dropSignal: 0,
+  visualBrightness: 0.42,
+  visualBrightnessTarget: 0.42,
+  visualMotion: 1,
+  visualMotionTarget: 1,
+  rms: 0,
+  onsetStrength: 0,
+  flashColorPhase: false,
+  energyShortHistory: new Array(24).fill(0.05),
+  energyShortHistIndex: 0,
+  energyShortHistSum: 0.05 * 24,
+  subShortHistory: new Array(24).fill(0.05),
+  subShortHistIndex: 0,
+  subShortHistSum: 0.05 * 24,
+  fluxShortHistory: new Array(24).fill(0.01),
+  fluxShortHistIndex: 0,
+  fluxShortHistSum: 0.01 * 24,
+  highShortHistory: new Array(24).fill(0.05),
+  highShortHistIndex: 0,
+  highShortHistSum: 0.05 * 24,
+  energyAccHistory: new Array(180).fill(0.05),
+  energyAccHistIndex: 0,
+  energyAccHistSum: 0.05 * 180,
+
+  particles: [],
+  time: 0,
+  flashOpacity: 0,
+  washOpacity: 0,
+  washHue: 0,
+  impactPulse: 0,
+
+  // Silence/idle handling
+  silenceThreshold: 0.07,
+  silenceHoldMs: 2000,
+  silenceMs: 0,
+  idleTarget: 0,
+  idleBlend: 0,
+  motionScale: 1,
+
+  // VORTEX
+  vortexBeatTwist: 0,
+
+  // PULSE
+  pulseWaves: [],
+
+  // SHATTER
+  shatterMesh: [],
+  shatterCols: 16,
+  shatterRows: 10,
+  shatterBeatImpulse: 0,
+  shatterDropImpulse: 0,
+
+  // ── EMA envelope + peak follower ──────────────────────────────────────────
+  // fast = ~0.5 s response, slow = ~30 s baseline, peak = slow decay max tracker
+  shortEnergy: 0.05,
+  longEnergy: 0.05,
+  peakEnergy: 0,
+  shortEnergyAlpha: 0.12,
+  longEnergyAlpha: 0.002,
+  peakDecay: 0.9995,
+  warmupFrames: 180,
+  beatPulse: 0,
+  beatPulseDecay: 0.72,
+  onsetPulse: 0,
+  beatPhase: 0,
+
+  // Live signals
+  spectralFlux: 0,
+  fluxSmooth: 0,
+  fluxEmaFast: 0.01,
+  fluxEmaSlow: 0.01,
+  fluxTrend: 0,     // rising flux → BUILD signal
+  bassSpike: 0,
+  buildActive: false,
+  ddBuild: 0,
+  ddDrop: 0,
+  ddBassZ: 0,
+  ddFluxZ: 0,
+
+  // State hold times
+  stateHoldTimes: { IDLE: 1500, BUILD: 3000, DROP: 2000, GROOVE: 2000, BREAKDOWN: 4000 },
+  lastStateSwitchSec: 0,
+};
+
+// ═══════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const el = {
+  idle: document.getElementById('idle'),
+  status: document.getElementById('status'),
+  btnStart: document.getElementById('btn-start'),
+  btnSource: document.getElementById('btn-source'),
+  btnMode: document.getElementById('btn-mode'),
+  btnColor: document.getElementById('btn-color'),
+  btnStrobe: document.getElementById('btn-strobe'),
+  btnFs: document.getElementById('btn-fs'),
+  ui: document.getElementById('ui'),
+  meters: document.getElementById('meters'),
+  modeLabel: document.getElementById('mode-label'),
+  sectionLabel: document.getElementById('section-label'),
+  debug: document.getElementById('debug'),
+  flash: document.getElementById('flash'),
+  strobe: document.getElementById('strobe'),
+  wash: document.getElementById('wash'),
+  grid: document.getElementById('grid'),
+  bassFill: document.querySelector('#m-bass .meter-fill'),
+  midFill: document.querySelector('#m-mid .meter-fill'),
+  highFill: document.querySelector('#m-high .meter-fill'),
+  bpmFill: document.querySelector('#m-bpm .meter-fill'),
+  bpmValue: document.getElementById('bpm-value'),
+  energyState: document.getElementById('energy-state'),
+};
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function getMeanStd(arr, meanHint = null) {
+  const mean = meanHint !== null ? meanHint : arr.reduce((a,b)=>a+b,0)/arr.length;
+  let v = 0;
+  for (let i=0; i<arr.length; i++) {
+    const d = arr[i] - mean;
+    v += d * d;
+  }
+  return { mean, std: Math.sqrt(v / arr.length) };
+}
+
+function pushRolling(value, arr, indexKey, sumKey) {
+  state[sumKey] -= arr[state[indexKey]];
+  arr[state[indexKey]] = value;
+  state[sumKey] += value;
+  state[indexKey] = (state[indexKey] + 1) % arr.length;
+  return state[sumKey] / arr.length;
+}
+
+function lerpHue(a, b, t) {
+  const d = ((((b - a) % 360) + 540) % 360) - 180;
+  return (a + d * t + 360) % 360;
+}
+
+function getSectionFadeAlpha() {
+  if (state.musicState === 'IDLE')      return 0.55;
+  if (state.musicState === 'DROP')      return 0.02;
+  if (state.musicState === 'BUILD')     return 0.08;
+  if (state.musicState === 'GROOVE')    return 0.22;
+  if (state.musicState === 'BREAKDOWN') return 0.42;
+  return 0.22;
+}
+
+function getSectionDrawAlpha() {
+  return clamp(0.45 + state.sectionIntensityMul * 0.62, 0.24, 1);
+}
+
+function getVisualDrive() {
+  return clamp(state.bassSmooth * 0.3 + state.beatPulse * 0.5 + state.onsetPulse * 0.2, 0, 1);
+}
+
+function getBeatReactiveFade(mult = 1) {
+  return clamp(getSectionFadeAlpha() * mult * (1 - state.beatPulse * 0.6), 0.01, 0.95);
+}
+
+function updateBandBins() {
+  if (!state.audioCtx || !state.bufferLen) return;
+  const nyquist = state.audioCtx.sampleRate / 2;
+  const hzToBin = (hz) => clamp(Math.round((hz / nyquist) * state.bufferLen), 0, Math.max(0, state.bufferLen - 1));
+  state.bandBins.sub  = [hzToBin(40),   hzToBin(120)];
+  state.bandBins.bass = [hzToBin(120),  hzToBin(250)];
+  state.bandBins.mid  = [hzToBin(250),  hzToBin(3000)];
+  state.bandBins.hi   = [hzToBin(3000), hzToBin(9000)];
+}
+
+function createEdmDropDetector({ sampleRate, fftSize, binCount }) {
+  const nyquist = sampleRate / 2;
+  const hzToBin = (hz) => Math.max(0, Math.min(binCount - 1, Math.round((hz / nyquist) * binCount)));
+  const B_SUB0 = hzToBin(40),   B_SUB1 = hzToBin(120);
+  const B_BAS0 = hzToBin(120),  B_BAS1 = hzToBin(250);
+  const B_HI0  = hzToBin(3000), B_HI1  = hzToBin(9000);
+
+  let eFast=0, eSlow=0, bFast=0, bSlow=0, hiFast=0, hiSlow=0, fluxFast=0, fluxSlow=0;
+  let build=0, drop=0, section='GROOVE';
+  const stats = { bass:{mu:0, v:1e-4}, flux:{mu:0, v:1e-4} };
+  const upd = (s, x, a) => { const d = x - s.mu; s.mu += a * d; s.v = Math.max(1e-6, s.v + a * (d * d - s.v)); };
+  const z = (s, x) => (x - s.mu) / Math.sqrt(s.v);
+  let prev = new Uint8Array(binCount);
+  let lastDropAt = -999, lastStateAt = -999, lastDipAt = -999, lastBreakdownAt = -999;
+  const MIN_HOLD = 2.5, DROP_REFRACT = 10.0, BREAKDOWN_REFRACT = 5.0;
+  const bandMean = (arr, i0, i1) => {
+    let s=0, n=0;
+    for (let i=i0; i<=i1; i++) { s += arr[i] || 0; n++; }
+    return (s / Math.max(1, n)) / 255;
+  };
+
+  return {
+    update(freq, nowSec) {
+      const sub = bandMean(freq, B_SUB0, B_SUB1);
+      const bas = bandMean(freq, B_BAS0, B_BAS1);
+      const hi  = bandMean(freq, B_HI0, B_HI1);
+      const energy = 0.45 * sub + 0.35 * bas + 0.20 * hi;
+
+      let flux = 0;
+      for (let i=0; i<=B_HI1; i++) flux += Math.max(0, (freq[i] || 0) - (prev[i] || 0));
+      prev.set(freq);
+      flux = flux / (Math.max(1, B_HI1) * 255);
+
+      const AF=0.18, AS=0.015;
+      eFast += (energy - eFast) * AF; eSlow += (energy - eSlow) * AS;
+      bFast += (sub    - bFast) * AF; bSlow += (sub    - bSlow) * AS;
+      hiFast += (hi    - hiFast) * AF; hiSlow += (hi    - hiSlow) * AS;
+      fluxFast += (flux - fluxFast) * 0.25; fluxSlow += (flux - fluxSlow) * 0.02;
+
+      upd(stats.bass, bFast, 0.02);
+      upd(stats.flux, fluxFast, 0.02);
+      const bassZ = z(stats.bass, bFast);
+      const fluxZ = z(stats.flux, fluxFast);
+
+      const eRatio = eFast / Math.max(1e-3, eSlow);
+      const hiRatio = hiFast / Math.max(1e-3, hiSlow);
+      const bassRatio = bFast / Math.max(1e-3, bSlow);
+
+      const dipNow = (eFast < 0.78 * eSlow) && (fluxFast < fluxSlow * 0.9);
+      if (dipNow) lastDipAt = nowSec;
+
+      const buildHit = (fluxZ > 1.8 && hiRatio > 1.12 && eRatio > 1.05 && bassRatio < 1.05);
+      build += ((buildHit ? 1 : 0) - build) * (buildHit ? 0.25 : 0.08);
+
+      const dipRecent = (nowSec - lastDipAt) < 1.6;
+      const refractOk = (nowSec - lastDropAt) > DROP_REFRACT;
+      const breakdownOk = (nowSec - lastBreakdownAt) > BREAKDOWN_REFRACT;
+      const dropHit = refractOk && dipRecent && build > 0.55 && (bassZ > 2.6) && (eRatio > 1.25) && (fluxZ > 1.0);
+      drop += ((dropHit ? 1 : 0) - drop) * (dropHit ? 0.35 : 0.12);
+
+      const canSwitch = (nowSec - lastStateAt) > MIN_HOLD;
+      let wanted = section;
+      const silenceHit = energy < 0.04 && eFast < 0.05;
+      if (silenceHit) wanted = 'IDLE';
+      else if (drop > 0.65) wanted = 'DROP';
+      else if (build > 0.60) wanted = 'BUILD';
+      else if (eRatio < 0.92 && fluxFast < fluxSlow * 0.85 && breakdownOk) wanted = 'BREAKDOWN';
+      else wanted = 'GROOVE';
+
+      if (wanted !== section && canSwitch) {
+        section = wanted;
+        lastStateAt = nowSec;
+        if (section === 'DROP') lastDropAt = nowSec;
+        if (section === 'BREAKDOWN') lastBreakdownAt = nowSec;
+      }
+
+      return { state: section, build, drop, bassZ, fluxZ, energyRatio: eRatio };
+    }
+  };
+}
+
+function canBeatPhaseTrigger(nowSec, lookAheadSec = 0.02) {
+  return state.beatPhaseConfidence > 0.4 && nowSec >= (state.nextBeatAt - lookAheadSec);
+}
+
+function updateMusicState(now, detectorState = null) {
+  if (state.warmupFrames > 0) {
+    state.warmupFrames--;
+    return;
+  }
+
+  const nowSec = state.audioCtx ? state.audioCtx.currentTime : (now / 1000);
+  const prev = state.musicState;
+  const wanted = detectorState || prev;
+
+  const minHold = state.stateHoldTimes[prev] ?? 2000;
+  const elapsed = (nowSec - state.lastStateSwitchSec) * 1000;
+  if (wanted !== prev && elapsed > minHold) {
+    state.musicState = wanted;
+    state.lastStateSwitchSec = nowSec;
+    state.sectionLastSwitchAt = now;
+
+    if (wanted === 'DROP') {
+      state.dropImpactFrames = 8;
+      state.impactPulse = Math.max(state.impactPulse, 1.6);
+      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && canTriggerFlashEvent(now)) {
+        state.flashOpacity = Math.max(state.flashOpacity, 1.8);
+        state.floodFrames = 3;
+        state.floodHue = getPaletteHue(24 + Math.random() * 36);
+        SafetyLimiter.recordFlash(now);
+      }
+      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02)) triggerStrobePulse(1.2, now);
+      spawnBurst(48);
+    }
+  }
+
+  const ratio = state.shortEnergy / Math.max(state.longEnergy, 0.001);
+
+  // ── Visual targets per state ─────────────────────────────────────────────
+  let targetMul        = 1;
+  let targetBrightness = 0.5;
+  let targetMotion     = 1;
+
+  if (state.musicState === 'IDLE') {
+    targetMul        = 0.05;
+    targetBrightness = 0.05;
+    targetMotion     = 0.2;
+  } else if (state.musicState === 'BUILD') {
+    // Ramp: as ratio climbs toward ~1.5, push toward full intensity
+    const slope = clamp((ratio - 1.05) / 0.45, 0, 1);
+    targetMul        = 0.3 + slope * 1.15;
+    targetBrightness = 0.3 + slope * 0.6;
+    targetMotion     = 0.8 + slope * 0.7;
+  } else if (state.musicState === 'DROP') {
+    targetMul        = 2.4;
+    targetBrightness = 1.25;
+    targetMotion     = 2.15;
+  } else if (state.musicState === 'GROOVE') {
+    targetMul        = 0.95;
+    targetBrightness = 0.6;
+    targetMotion     = 1.2;
+  } else if (state.musicState === 'BREAKDOWN') {
+    targetMul        = 0.2;
+    targetBrightness = 0.15;
+    targetMotion     = 0.4;
+  }
+
+  // DROP impact boost
+  if (state.dropImpactFrames > 0) {
+    const k = state.dropImpactFrames / 8;
+    targetMul        += 0.35 * k;
+    targetBrightness  = Math.max(targetBrightness, 0.92 + k * 0.08);
+    targetMotion      = Math.max(targetMotion, 1.35 + k * 0.4);
+    state.dropImpactFrames -= 1;
+  }
+
+  // ── Lerp toward targets ──────────────────────────────────────────────────
+  const mulRate    = (targetMul > state.sectionIntensityMul) ? 0.12 : 0.06;
+  state.sectionIntensityMul += (targetMul - state.sectionIntensityMul) * mulRate;
+  state.visualBrightnessTarget = targetBrightness;
+  state.visualMotionTarget     = targetMotion;
+  state.visualBrightness += (state.visualBrightnessTarget - state.visualBrightness) * 0.06;
+  state.visualMotion     += (state.visualMotionTarget     - state.visualMotion)     * 0.08;
+}
+
+function applyPreset(index) {
+  state.presetIndex = index % state.presets.length;
+  const p = state.presets[state.presetIndex];
+  state.beatK = p.beatK;
+  state.highK = p.highK;
+  state.beatCooldownMs = p.beatCooldownMs;
+  state.bpmConfidenceMin = p.bpmConfidenceMin;
+  state.maxStrobeHz = p.maxStrobeHz;
+}
+
+function applyPresetToRunningAnalyser() {
+  if (!state.running || !state.analyser) return;
+  const p = state.presets[state.presetIndex];
+
+  state.analyser.fftSize = p.fftSize;
+  state.analyser.smoothingTimeConstant = p.smoothing;
+  state.analyser.minDecibels = -90;
+  state.analyser.maxDecibels = -18;
+
+  const newLen = state.analyser.frequencyBinCount;
+  if (newLen !== state.bufferLen) {
+    state.bufferLen = newLen;
+    state.dataArray = new Uint8Array(newLen);
+    state.prevFreqArray = new Uint8Array(newLen);
+    state.waveArray = new Uint8Array(newLen);
+  }
+
+  updateBandBins();
+  state.dropDetector = createEdmDropDetector({
+    sampleRate: state.audioCtx.sampleRate,
+    fftSize: state.analyser.fftSize,
+    binCount: state.bufferLen,
+  });
+}
+
+function triggerStrobePulse(intensity, now = performance.now()) {
+  if (!SafetyLimiter.allowFlash(now, state.strobeMode === 2)) return;
+  state.flashColorPhase = !state.flashColorPhase;
+  state.strobeOpacity = Math.max(state.strobeOpacity, clamp(intensity, 0, 1));
+  state.strobePulseUntil = Math.max(state.strobePulseUntil, now + state.strobePulseMs);
+  state.lastStrobeHit = now;
+  SafetyLimiter.recordFlash(now);
+}
+
+function canTriggerFlashEvent(now = performance.now()) {
+  const budget = state.flashBudget[state.musicState] ?? 0;
+  return SafetyLimiter.getRate(now) < budget;
+}
+
+function sourceStartLabel() {
+  const name = state.sourceNames[state.sourceMode];
+  return `▶ START ${name}`;
+}
+
+function updateSectionLabel() {
+  el.sectionLabel.textContent = `STATE: ${state.musicState}`;
+  el.sectionLabel.style.display = 'block';
+  el.sectionLabel.style.visibility = 'visible';
+  el.sectionLabel.style.opacity = state.running ? '1' : '0.55';
+}
+
+applyPreset(0);
+
+// ═══════════════════════════════════════════
+//  MODULES (core architecture)
+// ═══════════════════════════════════════════
+const SafetyLimiter = {
+  oneSecTimes: [],
+  burstTimes: [],
+  burstUntil: 0,
+  cooldownUntil: 0,
+  allowFlash(now, allowBurst = false) {
+    if (now < this.cooldownUntil) return false;
+
+    const oneSecMin = now - 1000;
+    while (this.oneSecTimes.length && this.oneSecTimes[0] < oneSecMin) this.oneSecTimes.shift();
+
+    const burstMin = now - 700;
+    while (this.burstTimes.length && this.burstTimes[0] < burstMin) this.burstTimes.shift();
+
+    const sustainedLimit = Math.max(3, Math.floor(state.maxStrobeHz || 3));
+    const hardGuardLimit = Math.max(14, sustainedLimit + 7);
+    const burstLimit = Math.max(7, Math.floor(sustainedLimit * 2.1));
+
+    // Hard guard
+    if (this.oneSecTimes.length >= hardGuardLimit) {
+      this.cooldownUntil = now + 900;
+      return false;
+    }
+
+    // Burst handling: max 6 flashes/sec for <=700ms then forced cooldown
+    if (allowBurst) {
+      if (this.burstUntil < now && this.oneSecTimes.length >= 3) {
+        this.burstUntil = now + 700;
+      }
+      if (this.burstUntil >= now) {
+        if (this.burstTimes.length >= burstLimit) {
+          this.cooldownUntil = now + 900;
+          this.burstUntil = 0;
+          return false;
+        }
+        return true;
+      }
+    }
+
+    // Sustained limit
+    if (this.oneSecTimes.length >= sustainedLimit) return false;
+    return true;
+  },
+  recordFlash(now) {
+    this.oneSecTimes.push(now);
+    this.burstTimes.push(now);
+  },
+  getRate(now) {
+    const oneSecMin = now - 1000;
+    let c = 0;
+    for (let i=this.oneSecTimes.length-1; i>=0; i--) {
+      if (this.oneSecTimes[i] >= oneSecMin) c++;
+      else break;
+    }
+    return c;
+  }
+};
+
+const BeatEngine = {
+  metrics: {
+    rms: 0,
+    shortEnergy: 0,
+    longEnergy: 0,
+    flux: 0,
+    bassSpike: 0,
+    bassZ: 0,
+    fluxZ: 0,
+    build: 0,
+    drop: 0,
+    silenceGate: false,
+  },
+  update() {
+    this.metrics.rms         = state.energySmooth;
+    this.metrics.shortEnergy = state.shortEnergy;
+    this.metrics.longEnergy  = state.longEnergy;
+    this.metrics.flux        = state.fluxSmooth;
+    this.metrics.bassSpike   = state.bassSpike;
+    this.metrics.bassZ       = state.ddBassZ || 0;
+    this.metrics.fluxZ       = state.ddFluxZ || 0;
+    this.metrics.build       = state.ddBuild || 0;
+    this.metrics.drop        = state.ddDrop || 0;
+    this.metrics.silenceGate = !!state._dbgSilenceGate;
+  }
+};
+
+const IntensityEngine = {
+  update() {
+    // already integrated in analysis path; kept as module boundary
+  }
+};
+
+const StrobeEngine = {
+  update() {
+    // already integrated via trigger logic + limiter; kept as module boundary
+  }
+};
+
+const LightRenderer = {
+  draw() {
+    drawEffects();
+  }
+};
+
+const MainController = {
+  debugVisible: false,
+  update() {
+    if (state.running && state.analyser) {
+      StrobeEngine.update();
+    }
+    if (this.debugVisible) this.renderDebug();
+  },
+  renderDebug() {
+    const now = performance.now();
+    const flashRate = SafetyLimiter.getRate(now);
+    const nowSec = state.audioCtx ? state.audioCtx.currentTime : 0;
+    const ratio = (state.shortEnergy / Math.max(state.longEnergy, 0.001)).toFixed(2);
+    const relPeak = (state.shortEnergy / Math.max(state.peakEnergy, 0.001)).toFixed(2);
+    el.debug.textContent = [
+      `state: ${state.musicState}  x${state.sectionIntensityMul.toFixed(2)}`,
+      `shortE: ${BeatEngine.metrics.shortEnergy.toFixed(3)}  longE: ${BeatEngine.metrics.longEnergy.toFixed(3)}  ratio: ${ratio}`,
+      `peakE: ${state.peakEnergy.toFixed(3)}  relPeak: ${relPeak}`,
+      `flux: ${BeatEngine.metrics.flux.toFixed(3)}  fluxTrend: ${state.fluxTrend.toFixed(3)}`,
+      `bassSpike: ${BeatEngine.metrics.bassSpike.toFixed(3)}  bassZ: ${BeatEngine.metrics.bassZ.toFixed(2)}`,
+      `fluxZ: ${BeatEngine.metrics.fluxZ.toFixed(2)}  build: ${BeatEngine.metrics.build.toFixed(2)}  drop: ${BeatEngine.metrics.drop.toFixed(2)}`,
+      `beatETA: ${(state.nextBeatAt - nowSec).toFixed(3)}s  beatPhaseConf: ${state.beatPhaseConfidence.toFixed(2)}`,
+      `RMS: ${BeatEngine.metrics.rms.toFixed(3)}`,
+      `BPM: ${Math.round(state.bpmSmooth) || '--'}  conf=${Math.round(state.bpmConfidence*100)}%`,
+      `brightness: ${state.visualBrightness.toFixed(2)}  motion: ${state.visualMotion.toFixed(2)}`,
+      `flash/s: ${flashRate}`,
+      `intensity: ${state.intensity.toFixed(2)}`,
+      `silenceGate: ${BeatEngine.metrics.silenceGate ? 'ON' : 'off'}`,
+    ].join('\n');
+  },
+  toggleDebug() {
+    this.debugVisible = !this.debugVisible;
+    el.debug.classList.toggle('visible', this.debugVisible);
+  }
+};
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  initShatterMesh();
+}
+resize();
+window.addEventListener('resize', resize);
+
+function startAnalysisLoop() {
+  stopAnalysisLoop();
+  const intervalMs = Math.round(1000 / Math.max(1, state.analysisHz || 100));
+  state.analysisTimer = setInterval(() => {
+    if (!state.running || !state.analyser) return;
+    analyzeAudio();
+    BeatEngine.update();
+    IntensityEngine.update();
+  }, intervalMs);
+}
+
+function stopAnalysisLoop() {
+  if (state.analysisTimer) {
+    clearInterval(state.analysisTimer);
+    state.analysisTimer = null;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  AUDIO INIT
+// ═══════════════════════════════════════════
+async function startAudio() {
+  try {
+    await stopAudio();
+    const preset = state.presets[state.presetIndex];
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    state.analyser = state.audioCtx.createAnalyser();
+    state.analyser.fftSize = preset.fftSize;
+    state.analyser.smoothingTimeConstant = preset.smoothing;
+    state.analyser.minDecibels = -90;
+    state.analyser.maxDecibels = -18;
+
+    state.sourceNodes = [];
+    state.mediaStreams = [];
+
+    // Source selector: MIC / SYSTEM / MIX
+    if (state.sourceMode === 0 || state.sourceMode === 2) {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+        video: false,
+      });
+      state.mediaStreams.push(micStream);
+      const micSource = state.audioCtx.createMediaStreamSource(micStream);
+      state.sourceNodes.push(micSource);
+      micSource.connect(state.analyser);
+    }
+
+    if (state.sourceMode === 1 || state.sourceMode === 2) {
+      const sysStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: true,
+        video: true,
+      });
+      state.mediaStreams.push(sysStream);
+      const sysSource = state.audioCtx.createMediaStreamSource(sysStream);
+      state.sourceNodes.push(sysSource);
+      sysSource.connect(state.analyser);
+    }
+
+    state.bufferLen = state.analyser.frequencyBinCount;
+    state.dataArray = new Uint8Array(state.bufferLen);
+    state.prevFreqArray = new Uint8Array(state.bufferLen);
+    state.waveArray = new Uint8Array(state.bufferLen);
+    updateBandBins();
+    state.dropDetector = createEdmDropDetector({
+      sampleRate: state.audioCtx.sampleRate,
+      fftSize: state.analyser.fftSize,
+      binCount: state.bufferLen,
+    });
+    state.beatPeriodSec = 0.5;
+    state.nextBeatAt = state.audioCtx.currentTime;
+    state.beatPhaseConfidence = 0;
+    state.lastStateSwitchSec = state.audioCtx.currentTime;
+
+    state.running = true;
+    startAnalysisLoop();
+    el.idle.classList.add('hidden');
+    el.status.textContent = '● LIVE';
+    el.btnStart.textContent = '■ STOP';
+    el.btnStart.classList.add('active');
+  } catch(e) {
+    state.running = false;
+    el.status.textContent = '✗ AUDIO DENIED';
+    alert('Přístup k audio zdroji byl zamítnut. Povol mikrofon/sdílení zvuku v prohlížeči.');
+  }
+}
+
+async function stopAudio() {
+  stopAnalysisLoop();
+  // Stop all captured tracks (mic/system/tab)
+  state.mediaStreams.forEach((stream) => {
+    stream.getTracks().forEach((t) => t.stop());
+  });
+  state.mediaStreams = [];
+  state.sourceNodes = [];
+
+  if (state.audioCtx) {
+    await state.audioCtx.close();
+    state.audioCtx = null;
+  }
+
+  state.running = false;
+  state.analyser = null;
+  state.dataArray = null;
+  state.prevFreqArray = null;
+  state.waveArray = null;
+  state.bufferLen = 0;
+  state.dropDetector = null;
+  state.bandBins = { sub:[0,0], bass:[0,0], mid:[0,0], hi:[0,0] };
+  state.strobeOpacity = 0;
+  state.strobePulseUntil = 0;
+  state.nextStrobeAt = 0;
+  state.lastStrobeHit = 0;
+  state.lastMicroFlashAt = 0;
+  state.prevHighSmooth = 0;
+  state.hardStrobeFrames = 0;
+  state.microFlashOpacity = 0;
+  state.overdriveWhite = 0;
+  state.floodFrames = 0;
+  state.autoBlackoutFrames = 0;
+  state.autoWhiteoutFrames = 0;
+  state.whiteoutDecay = 0;
+  state.intensity = 1;
+  state.musicState = 'IDLE';
+  state.sectionIntensityMul = 1;
+  state.dropImpactFrames = 0;
+  state.silenceSignal = 0;
+  state.grooveSignal = 0;
+  state.buildupSignal = 0;
+  state.dropSignal = 0;
+  state.visualBrightness = 0.42;
+  state.visualBrightnessTarget = 0.42;
+  state.visualMotion = 1;
+  state.visualMotionTarget = 1;
+  state.vortexBeatTwist = 0;
+  state.pulseWaves = [];
+  state.shatterBeatImpulse = 0;
+  state.shatterDropImpulse = 0;
+  // EMA envelope reset
+  state.shortEnergy = 0.05;
+  state.longEnergy = 0.05;
+  state.peakEnergy = 0;
+  state.warmupFrames = 180;
+  state.beatPulse = 0;
+  state.onsetPulse = 0;
+  state.beatPhase = 0;
+  state.beatPeriodSec = 0.5;
+  state.nextBeatAt = 0;
+  state.beatPhaseConfidence = 0;
+  state.beatPhaseTriggerNow = false;
+  state.lastBeatTimeSec = 0;
+  state.lastStateSwitchSec = 0;
+  state.spectralFlux = 0;
+  state.fluxSmooth = 0;
+  state.fluxEmaFast = 0.01;
+  state.fluxEmaSlow = 0.01;
+  state.fluxTrend = 0;
+  state.bassSpike = 0;
+  state.buildActive = false;
+
+  el.status.textContent = '● STANDBY';
+  el.btnStart.textContent = sourceStartLabel();
+  el.btnStart.classList.remove('active');
+  el.idle.classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════════
+//  AUDIO ANALYSIS
+// ═══════════════════════════════════════════
+function analyzeAudio() {
+  if (!state.analyser) return;
+  state.analyser.getByteFrequencyData(state.dataArray);
+  state.analyser.getByteTimeDomainData(state.waveArray);
+
+  const len = state.bufferLen;
+  const [sub0, sub1] = state.bandBins.sub;
+  const [bas0, bas1] = state.bandBins.bass;
+  const [mid0, mid1] = state.bandBins.mid;
+  const [hi0, hi1] = state.bandBins.hi;
+
+  // ── Band energy ──────────────────────────────────────────────────────────
+  let subSum=0, bassSum=0, midSum=0, highSum=0;
+  for (let i=sub0; i<=sub1; i++) subSum += state.dataArray[i] || 0;
+  for (let i=bas0; i<=bas1; i++) bassSum += state.dataArray[i] || 0;
+  for (let i=mid0; i<=mid1; i++) midSum += state.dataArray[i] || 0;
+  for (let i=hi0; i<=hi1; i++) highSum += state.dataArray[i] || 0;
+
+  const rawSub    = (subSum  / Math.max(1, sub1 - sub0 + 1)) / 255;
+  const rawBass   = (bassSum / Math.max(1, bas1 - bas0 + 1)) / 255;
+  const rawMid    = (midSum  / Math.max(1, mid1 - mid0 + 1)) / 255;
+  const rawHigh   = (highSum / Math.max(1, hi1 - hi0 + 1)) / 255;
+  const rawEnergy = rawSub*0.35 + rawBass*0.35 + rawMid*0.2 + rawHigh*0.1;
+
+  // ── RMS ──────────────────────────────────────────────────────────────────
+  let rmsAccum = 0;
+  for (let i=0; i<len; i++) {
+    const n = (state.waveArray[i] - 128) / 128;
+    rmsAccum += n * n;
+  }
+  const rawRms = Math.sqrt(rmsAccum / Math.max(1, len));
+
+  // ── Spectral flux: sum(max(0, now[i] - prev[i])) ─────────────────────────
+  let fluxAccum=0, bassFluxAccum=0, highFluxAccum=0;
+  for (let i=0; i<=hi1; i++) {
+    const d = Math.max(0, state.dataArray[i] - state.prevFreqArray[i]);
+    fluxAccum += d;
+    if (i >= bas0 && i <= bas1) bassFluxAccum += d;
+    if (i >= hi0 && i <= hi1) highFluxAccum += d;
+  }
+  const fluxNorm     = fluxAccum     / (Math.max(1, hi1 + 1) * 255);
+  const bassFluxNorm = bassFluxAccum / (Math.max(1, bas1 - bas0 + 1) * 255);
+  const highFluxNorm = highFluxAccum / (Math.max(1, hi1 - hi0 + 1) * 255);
+  state.prevFreqArray.set(state.dataArray);
+
+  // ── Rolling histories (adaptive gain + strobe) ────────────────────────────
+  state.energyHistSum -= state.energyHistory[state.energyHistIndex];
+  state.energyHistory[state.energyHistIndex] = rawEnergy;
+  state.energyHistSum += rawEnergy;
+  state.energyHistIndex = (state.energyHistIndex + 1) % state.energyHistory.length;
+  const avgEnergy = state.energyHistSum / state.energyHistory.length;
+
+  state.fluxHistSum -= state.fluxHistory[state.fluxHistIndex];
+  state.fluxHistory[state.fluxHistIndex] = fluxNorm;
+  state.fluxHistSum += fluxNorm;
+  state.fluxHistIndex = (state.fluxHistIndex + 1) % state.fluxHistory.length;
+  const avgFlux = state.fluxHistSum / state.fluxHistory.length;
+
+  state.bassFluxHistSum -= state.bassFluxHistory[state.bassFluxHistIndex];
+  state.bassFluxHistory[state.bassFluxHistIndex] = bassFluxNorm;
+  state.bassFluxHistSum += bassFluxNorm;
+  state.bassFluxHistIndex = (state.bassFluxHistIndex + 1) % state.bassFluxHistory.length;
+  const avgBassFlux = state.bassFluxHistSum / state.bassFluxHistory.length;
+
+  state.highFluxHistSum -= state.highFluxHistory[state.highFluxHistIndex];
+  state.highFluxHistory[state.highFluxHistIndex] = highFluxNorm;
+  state.highFluxHistSum += highFluxNorm;
+  state.highFluxHistIndex = (state.highFluxHistIndex + 1) % state.highFluxHistory.length;
+  const avgHighFlux = state.highFluxHistSum / state.highFluxHistory.length;
+
+  const fluxStats     = getMeanStd(state.fluxHistory, avgFlux);
+  const highFluxStats = getMeanStd(state.highFluxHistory, avgHighFlux);
+
+  // ── Adaptive gain normalization ───────────────────────────────────────────
+  const gain = clamp(state.targetEnergy / Math.max(0.03, avgEnergy), state.gainMin, state.gainMax);
+  state.dynamicGain += (gain - state.dynamicGain) * 0.08;
+
+  state.subBass = clamp(rawSub  * state.dynamicGain, 0, 1);
+  state.bass    = clamp(rawBass * state.dynamicGain, 0, 1);
+  state.mid     = clamp(rawMid  * state.dynamicGain, 0, 1);
+  state.high    = clamp(rawHigh * state.dynamicGain, 0, 1);
+  state.energy  = clamp(rawEnergy * state.dynamicGain, 0, 1);
+
+  // ── Smoothing ─────────────────────────────────────────────────────────────
+  const sm = 0.2;
+  state.subBassSmooth += (state.subBass - state.subBassSmooth) * sm;
+  state.bassSmooth    += (state.bass    - state.bassSmooth)    * sm;
+  state.midSmooth     += (state.mid     - state.midSmooth)     * sm;
+  state.highSmooth    += (state.high    - state.highSmooth)    * sm;
+  state.energySmooth  += (state.energy  - state.energySmooth)  * sm;
+  const highRise = Math.max(0, state.highSmooth - state.prevHighSmooth);
+  state.prevHighSmooth = state.highSmooth;
+
+  // ── EMA envelope + peak follower ─────────────────────────────────────────
+  // fast = fast * 0.88 + energy * 0.12   (~0.5 s)
+  // slow = slow * 0.998 + energy * 0.002 (~30 s)
+  // peak = max(peak * 0.9995, energy)
+  const prevFast = state.shortEnergy;
+  state.shortEnergy =
+    state.shortEnergy * (1 - state.shortEnergyAlpha) + state.energy * state.shortEnergyAlpha;
+  state.longEnergy =
+    state.longEnergy * (1 - state.longEnergyAlpha) + state.energy * state.longEnergyAlpha;
+  state.peakEnergy = Math.max(state.peakEnergy * state.peakDecay, state.energy);
+
+  // Flux smoothing + rising-flux trend (drives BUILD detection)
+  state.spectralFlux = fluxNorm;
+  state.fluxSmooth  += (fluxNorm - state.fluxSmooth) * 0.15;
+  state.fluxEmaFast = state.fluxEmaFast * 0.55 + state.fluxSmooth * 0.45;
+  state.fluxEmaSlow = state.fluxEmaSlow * 0.95 + state.fluxSmooth * 0.05;
+  state.fluxTrend   = state.fluxEmaFast - state.fluxEmaSlow;
+
+  // Bass spike: sub-bass level as 0–1 (used in DROP gate)
+  state.bassSpike = state.subBassSmooth;
+
+  const nowSec = state.audioCtx ? state.audioCtx.currentTime : (performance.now() / 1000);
+  let ddResult = null;
+  if (state.dropDetector) {
+    ddResult = state.dropDetector.update(state.dataArray, nowSec);
+    state.ddBuild = ddResult.build;
+    state.ddDrop = ddResult.drop;
+    state.ddBassZ = ddResult.bassZ;
+    state.ddFluxZ = ddResult.fluxZ;
+    state.fluxTrend = ddResult.fluxZ;
+  }
+
+  // ── Energy-delta beat detection (EMA fast baseline) ───────────────────────
+  const now = performance.now();
+  const cooldownOk      = (now - state.lastBeatTime) > state.beatCooldownMs;
+  const energyDeltaBeat = state.energy > Math.max(0.04, prevFast * 1.3);
+  const subKick         = state.subBass > 0.08;
+  state.beatDetected    = energyDeltaBeat && subKick && cooldownOk;
+
+  // ── Spectral centroid → tonal hue ─────────────────────────────────────────
+  let centroidW=0, centroidS=0;
+  for (let i=1; i<=hi1; i++) {
+    const v = state.dataArray[i] / 255;
+    centroidS += v;
+    centroidW += i * v;
+  }
+  const centroidNorm = centroidS > 0 ? (centroidW / centroidS) / Math.max(1, hi1) : 0.5;
+  state.tonalHue = lerpHue(state.tonalHue, (30 + centroidNorm * 300) % 360, 0.08);
+
+  // ── Silence gate ──────────────────────────────────────────────────────────
+  const silenceGate = state.energy < (avgEnergy * 0.55);
+  state._dbgSilenceGate = silenceGate;
+
+  // ── Energy accumulator ────────────────────────────────────────────────────
+  if (state.energySmooth > 0.38)
+    state.energyAccumulator = clamp(state.energyAccumulator + 0.015 * state.intensity, 0, 1);
+  else
+    state.energyAccumulator = clamp(state.energyAccumulator - 0.03, 0, 1);
+
+  const intensityTarget = clamp(
+    0.88 + state.energySmooth * 1.45 + state.highSmooth * 0.7 + state.energyAccumulator * 1.15,
+    0.65, 2.9
+  );
+  state.intensity += (intensityTarget - state.intensity) * 0.08;
+
+  // ── Micro flashes on high transients ──────────────────────────────────────
+  const highTransient = highFluxNorm > (highFluxStats.mean + (state.highK * 0.82) * highFluxStats.std);
+  const microFlashAllowed = state.musicState === 'DROP' || state.musicState === 'BUILD';
+  const beatWindowOk = Math.abs(nowSec - state.nextBeatAt) <= 0.05;
+  if (state.strobeEnabled && microFlashAllowed && beatWindowOk && highTransient && (now - state.lastMicroFlashAt) > 180 && canTriggerFlashEvent(now)) {
+    const p = 0.48 + clamp(highFluxNorm * 4.8, 0, 0.48);
+    if (Math.random() < p) {
+      state.flashColorPhase = !state.flashColorPhase;
+      state.microFlashOpacity = Math.max(state.microFlashOpacity,
+        0.52 + clamp(highFluxNorm * 2.8, 0, 0.95));
+      state.lastMicroFlashAt = now;
+      SafetyLimiter.recordFlash(now);
+    }
+  }
+
+  // ── Strong-hit score → auto whiteout ─────────────────────────────────────
+  const bassFluxStats = getMeanStd(state.bassFluxHistory, avgBassFlux);
+  const bassFluxNorm01 = clamp((bassFluxNorm - bassFluxStats.mean) / Math.max(0.0001, bassFluxStats.std * 3), 0, 1);
+  const highFluxNorm01 = clamp((highFluxNorm - highFluxStats.mean) / Math.max(0.0001, highFluxStats.std * 3), 0, 1);
+  const energyJump     = clamp(state.energy - state.energySmooth, 0, 1);
+  const strongHitScore = 0.45 * bassFluxNorm01 + 0.25 * highFluxNorm01 + 0.30 * energyJump;
+
+  state.strongScoreHistSum -= state.strongScoreHistory[state.strongScoreHistIndex];
+  state.strongScoreHistory[state.strongScoreHistIndex] = strongHitScore;
+  state.strongScoreHistSum += strongHitScore;
+  state.strongScoreHistIndex = (state.strongScoreHistIndex + 1) % state.strongScoreHistory.length;
+  const strongMean  = state.strongScoreHistSum / state.strongScoreHistory.length;
+  const strongStats = getMeanStd(state.strongScoreHistory, strongMean);
+
+  // ── Auto blackout during long silences ───────────────────────────────────
+  if (silenceGate) state.lowEnergyMs += (state.frameDtMs || 16);
+  else             state.lowEnergyMs = Math.max(0, state.lowEnergyMs - (state.frameDtMs || 16) * 1.5);
+  if (state.lowEnergyMs > 800 && state.bpmConfidence < 0.35)
+    state.autoBlackoutFrames = Math.max(state.autoBlackoutFrames, 12);
+
+  // ── Beat confirmed: BPM tracking + visual triggers ────────────────────────
+  if (state.beatDetected) {
+    state.beatCounter += 1;
+    state.beatPhaseTriggerNow = canBeatPhaseTrigger(nowSec, 0.02);
+
+    if (state.lastBeatTime > 0) {
+      const interval = now - state.lastBeatTime;
+      let acceptedInterval = null;
+      if (interval > 333 && interval < 1000) {
+        acceptedInterval = interval;
+      } else if (interval > 167 && interval < 500) {
+        const aliasInterval = interval * 2;
+        if (aliasInterval > 333 && aliasInterval < 1000) acceptedInterval = aliasInterval;
+      }
+
+      if (acceptedInterval !== null) {
+        state.beatTimes.push(acceptedInterval);
+        if (state.beatTimes.length > 16) state.beatTimes.shift();
+
+        const sorted = [...state.beatTimes].sort((a,b) => a - b);
+        const mid    = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0
+          ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+        const rawBpm = Math.round(60000 / median);
+
+        let ignoredRawBpm = false;
+        if (state.bpm === 0) {
+          state.bpmSmooth = rawBpm;
+          state.bpm = rawBpm;
+          state.lastBpmAt = now;
+        } else {
+          const diff = Math.abs(rawBpm - state.bpm);
+          if (diff < 15) {
+            state.bpmSmooth += (rawBpm - state.bpmSmooth) * 0.15;
+            state.bpm = Math.round(state.bpmSmooth);
+            state.lastBpmAt = now;
+          } else if (diff > 30) {
+            state.bpmSmooth += (rawBpm - state.bpmSmooth) * 0.05;
+            state.bpm = Math.round(state.bpmSmooth);
+            state.lastBpmAt = now;
+          } else {
+            ignoredRawBpm = true;
+          }
+        }
+
+        const meanInt = state.beatTimes.reduce((a,b) => a+b, 0) / state.beatTimes.length;
+        let varInt = 0;
+        for (let ii=0; ii<state.beatTimes.length; ii++) {
+          const dd = state.beatTimes[ii] - meanInt;
+          varInt += dd * dd;
+        }
+        const cv = Math.sqrt(varInt / state.beatTimes.length) / Math.max(1, meanInt);
+        state.bpmConfidence = clamp(1 - (cv / 0.15), 0, 1);
+        if (ignoredRawBpm) state.bpmConfidence = clamp(state.bpmConfidence - 0.05, 0, 1);
+      }
+    }
+
+    if (state.lastBeatTimeSec > 0) {
+      const intervalSec = nowSec - state.lastBeatTimeSec;
+      if (intervalSec > 0.25 && intervalSec < 1.5) {
+        state.beatPeriodSec = state.beatPeriodSec * 0.85 + intervalSec * 0.15;
+        state.nextBeatAt = nowSec + state.beatPeriodSec;
+        state.beatPhaseConfidence = Math.min(1, state.beatPhaseConfidence + 0.1);
+      }
+    } else {
+      state.nextBeatAt = nowSec + state.beatPeriodSec;
+    }
+
+    const highGate = clamp((state.highSmooth - 0.05) / 0.26, 0, 1);
+    if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && state.strobeMode === 2) {
+      state.hardStrobeFrames = 2;
+    } else if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && state.strobeMode === 0 && highGate > 0.02) {
+      triggerStrobePulse(0.95 + highGate * 0.95, now);
+    }
+
+    state.lastBeatTime = now;
+    state.lastBeatTimeSec = nowSec;
+    onBeat();
+  } else {
+    state.beatPhaseTriggerNow = false;
+    state.beatPhaseConfidence = Math.max(0, state.beatPhaseConfidence - 0.002);
+  }
+
+  state.rms          = rawRms;
+  state.onsetStrength = clamp((state.energy - state.energySmooth) * 1.9 + (fluxNorm - avgFlux) * 18, 0, 1);
+  state.onsetPulse = clamp(state.onsetStrength * 2.5, 0, 1);
+
+  // ── 5-state machine ───────────────────────────────────────────────────────
+  updateMusicState(now, ddResult ? ddResult.state : null);
+
+  // ── Auto whiteout ─────────────────────────────────────────────────────────
+  const whiteThreshold = strongStats.mean + 2.8 * strongStats.std;
+  if (state.strobeEnabled && strongHitScore > whiteThreshold && (now - state.lastWhiteoutAt) > 1500) {
+    state.autoWhiteoutFrames = Math.max(state.autoWhiteoutFrames, 2);
+    state.lastWhiteoutAt = now;
+  }
+
+  // ── BPM-synced strobe ─────────────────────────────────────────────────────
+  const bpmForSync = Math.round(state.bpmSmooth || 0);
+  const hasRecentBpm = bpmForSync > 50 && bpmForSync < 220
+    && (now - state.lastBpmAt) < 5000
+    && state.bpmConfidence >= state.bpmConfidenceMin;
+
+  if (hasRecentBpm && state.strobeEnabled && state.strobeMode === 1) {
+    const beatMs = 60000 / bpmForSync;
+    let division = 1;
+    if      (state.intensity >= 0.75) division = 4;
+    else if (state.intensity >= 0.45) division = 2;
+    const stepMs = beatMs / division;
+    if (!state.nextStrobeAt || (now - state.nextStrobeAt) > beatMs * 2)
+      state.nextStrobeAt = now;
+    if (now >= state.nextStrobeAt) {
+      while (state.nextStrobeAt <= now) state.nextStrobeAt += stepMs;
+      const hg = clamp((state.highSmooth - 0.02) / 0.2, 0, 1);
+      if (hg > 0.01 && canBeatPhaseTrigger(nowSec, 0.02)) triggerStrobePulse(1 + hg * 0.95, now);
+    }
+  } else if (state.strobeEnabled && (state.strobeMode === 0 || state.strobeMode === 1)) {
+    const hg = clamp((state.highSmooth - 0.04) / 0.24, 0, 1);
+    const transient = highRise > 0.006 || highTransient;
+    const minGap = state.strobeMode === 1 ? 28 : 18;
+    const base   = state.strobeMode === 1 ? 0.9 : 0.8;
+    if (transient && hg > 0.02 && canBeatPhaseTrigger(nowSec, 0.02) && (now - state.lastStrobeHit) > minGap)
+      triggerStrobePulse(base + hg * 1.15, now);
+  }
+}
+
+
+function onBeat() {
+  const live = 1 - state.idleBlend;
+  const rage = 1 + state.energyAccumulator * 1.1;
+  const now = performance.now();
+  const beatFlashConfidence = 0.3 + state.bpmConfidence * 0.7;
+  const beatPhaseOk = state.beatPhaseTriggerNow;
+  const beatFlashAllowed = state.strobeEnabled && beatPhaseOk && state.bpmConfidence >= 0.2 && canTriggerFlashEvent(now);
+  state.beatPulse = 1.0;
+  state.flashColorPhase = !state.flashColorPhase;
+  const dropBoost = state.musicState === 'DROP' ? 1.45 : 1;
+  const i = state.intensity * state.sectionIntensityMul * dropBoost;
+  // Flash
+  if (beatFlashAllowed) {
+    state.flashOpacity = Math.min(2.8, (0.9 + state.subBass * 1.8 * i) * rage * (0.75 + live * 1.05) * beatFlashConfidence);
+    SafetyLimiter.recordFlash(now);
+  } else {
+    state.flashOpacity = Math.min(state.flashOpacity, 0.04);
+  }
+  if (state.musicState === 'DROP' && (state.subBass > 0.7 || state.energy > 0.65) && beatFlashAllowed) {
+    state.overdriveWhite = Math.min(1.6, 0.5 + state.subBass * 1.05 * i + state.energyAccumulator * 0.6);
+  }
+
+  // Spawn particles burst
+  if (
+    state.mode === 0 ||
+    state.mode === 3 ||
+    state.mode === 4 ||
+    (state.mode === 7 && (state.allCurrentMode === 0 || state.allCurrentMode === 3 || state.allCurrentMode === 4))
+  ) spawnBurst(24 + Math.floor(state.subBass * 92 * live * i));
+  // Color wash
+  state.washOpacity = Math.min(1.2, (0.5 + state.bass * 1.25 * i) * (0.7 + live * 0.9));
+  const hueStep = state.colorMode === 2 ? 18 : state.colorMode === 3 ? 28 : 47;
+  state.washHue = (state.washHue + hueStep) % 360;
+  // Global pulse kick
+  state.impactPulse = Math.min(2, (0.95 + state.subBassSmooth * 2.5 * i) * rage * (0.8 + live * 0.9));
+
+  // Mode-specific impulses
+  state.vortexBeatTwist = Math.max(
+    state.vortexBeatTwist,
+    (0.38 + state.subBassSmooth * 1.25) * (0.45 + state.sectionIntensityMul * 0.55)
+  );
+
+  if (state.mode === 5 || (state.mode === 7 && state.allCurrentMode === 5)) {
+    const idle = state.musicState === 'IDLE' || state.musicState === 'BREAKDOWN';
+    const drop = state.musicState === 'DROP';
+    const count = idle ? 1 : drop ? 4 : 2;
+    for (let n=0; n<count; n++) {
+      const band = drop ? n % 3 : (state.subBassSmooth > state.highSmooth ? 0 : 1 + (n % 2));
+      spawnPulseWave(band, drop ? (1 + Math.random() * 0.65) : (0.9 + Math.random() * 0.35));
+    }
+  }
+
+  state.shatterBeatImpulse = Math.max(
+    state.shatterBeatImpulse,
+    (0.42 + state.subBassSmooth * 0.8) * (0.35 + state.sectionIntensityMul * 0.6)
+  );
+  if (state.musicState === 'DROP') {
+    state.shatterDropImpulse = Math.max(
+      state.shatterDropImpulse,
+      0.85 + state.subBassSmooth * 0.85 + state.energySmooth * 0.4
+    );
+  }
+}
+
+// ═══════════════════════════════════════════
+//  COLOR HELPERS
+// ═══════════════════════════════════════════
+function getColor(t, alpha=1, freq=null) {
+  // t = 0..1 position, freq = frequency value 0..1
+  const v = freq !== null ? freq : t;
+  switch(state.colorMode) {
+    case 0: { // MONO — white/grey
+      const b = Math.floor(180 + v * 75);
+      return `rgba(${b},${b},${b},${alpha})`;
+    }
+    case 1: { // SPECTRUM
+      const h = (t * 280 + state.time * 20) % 360;
+      const s = 70 + v * 30;
+      const l = 40 + v * 40;
+      return `hsla(${h},${s}%,${l}%,${alpha})`;
+    }
+    case 2: { // FIRE
+      const h = v * 50; // red→orange→yellow
+      const s = 100;
+      const l = 20 + v * 60;
+      return `hsla(${h},${s}%,${l}%,${alpha})`;
+    }
+    case 3: { // ACID
+      const h = ((t * 180) + 80 + Math.sin(state.time*2)*40) % 360;
+      return `hsla(${h},100%,${50+v*30}%,${alpha})`;
+    }
+  }
+}
+
+function getBassColor(alpha=1) {
+  return getColor(0, alpha, state.bassSmooth);
+}
+
+function getPaletteHue(offset = 0) {
+  const base = (state.washHue + offset) % 360;
+  switch(state.colorMode) {
+    case 0:
+      return null;
+    case 1:
+      return base;
+    case 2: {
+      const fireBand = [8, 18, 32, 46];
+      const idx = Math.floor(((state.time * 3) + offset / 24) % fireBand.length);
+      return fireBand[idx];
+    }
+    case 3: {
+      const acidBand = [86, 118, 168, 292];
+      const idx = Math.floor(((state.time * 2.4) + offset / 36) % acidBand.length);
+      return acidBand[idx];
+    }
+  }
+}
+
+function getFlashTint(alpha=1, offset=0, lightness=62) {
+  const hue = getPaletteHue(offset);
+  if (hue === null) return `rgba(255,255,255,${alpha})`;
+  return `hsla(${hue},100%,${lightness}%,${alpha})`;
+}
+
+function getAlternatingFlashTint(alpha=1, offset=0, lightness=62) {
+  if (!state.flashColorPhase) return `rgba(255,255,255,${alpha})`;
+  return getFlashTint(alpha, offset, lightness);
+}
+
+function sampleSpectrumRange(startNorm, endNorm) {
+  if (!state.dataArray || !state.bufferLen) return state.energySmooth;
+  const a = clamp(startNorm, 0, 1);
+  const b = clamp(endNorm, 0, 1);
+  const lo = Math.floor(Math.min(a, b) * (state.bufferLen - 1));
+  const hi = Math.max(lo + 1, Math.floor(Math.max(a, b) * (state.bufferLen - 1)));
+  let sum = 0;
+  let count = 0;
+  for (let i = lo; i <= hi; i++) {
+    sum += state.dataArray[i] || 0;
+    count++;
+  }
+  return count > 0 ? (sum / count) / 255 : state.energySmooth;
+}
+
+function getPulseBandColor(band, alpha = 1, strength = 0.5) {
+  const s = clamp(strength, 0, 1);
+  if (state.colorMode === 0) {
+    const b = Math.floor(188 + s * 62);
+    return `rgba(${b},${b},${b},${alpha})`;
+  }
+
+  // Keep explicit bass/mid/high separation only in SPECTRUM mode
+  if (state.colorMode === 1) {
+    if (band === 0) {
+      const h = 8 + s * 22;
+      return `hsla(${h},100%,${44 + s * 18}%,${alpha})`;
+    }
+    if (band === 1) {
+      const h = 198 + s * 22;
+      return `hsla(${h},96%,${48 + s * 18}%,${alpha})`;
+    }
+    const sat = 42 + (1 - s) * 48;
+    const light = 66 + s * 24;
+    return `hsla(${108 + s * 18},${sat}%,${light}%,${alpha})`;
+  }
+
+  // FIRE / ACID should follow global palette like other modes
+  const t = band === 0 ? 0.06 : band === 1 ? 0.45 : 0.82;
+  return getColor(t, alpha, s);
+}
+
+function spawnPulseWave(band = 0, multiplier = 1) {
+  const sectionMul = state.sectionIntensityMul;
+  const chill = state.musicState === 'CHILL';
+  const baseSpeed = chill ? 1.4 : 2.4;
+  const speed = (baseSpeed + band * 0.55 + state.visualMotion * 0.45) * multiplier * (0.45 + sectionMul * 0.7);
+  const life = chill ? 1.25 : 1;
+  state.pulseWaves.push({
+    band,
+    r: Math.max(8, 10 + band * 8),
+    speed,
+    life,
+    maxLife: life,
+    thickness: 1.8 + band * 0.55 + state.highSmooth * 2.2,
+    roughness: 8 + band * 5,
+    seed: Math.random() * Math.PI * 2,
+  });
+
+  if (state.pulseWaves.length > 64) {
+    state.pulseWaves.splice(0, state.pulseWaves.length - 64);
+  }
+}
+
+function initShatterMesh() {
+  const cols = state.shatterCols;
+  const rows = state.shatterRows;
+  const cellW = canvas.width / cols;
+  const cellH = canvas.height / rows;
+  const points = [];
+
+  for (let y = 0; y <= rows; y++) {
+    const row = [];
+    for (let x = 0; x <= cols; x++) {
+      const edge = (x === 0 || y === 0 || x === cols || y === rows);
+      const jitterX = edge ? 0 : (Math.random() - 0.5) * cellW * 0.65;
+      const jitterY = edge ? 0 : (Math.random() - 0.5) * cellH * 0.65;
+      row.push({
+        x: x * cellW + jitterX,
+        y: y * cellH + jitterY,
+      });
+    }
+    points.push(row);
+  }
+
+  const tris = [];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const p00 = points[y][x];
+      const p10 = points[y][x + 1];
+      const p01 = points[y + 1][x];
+      const p11 = points[y + 1][x + 1];
+      const diag = Math.random() < 0.5;
+
+      if (diag) {
+        tris.push([p00, p10, p11]);
+        tris.push([p00, p11, p01]);
+      } else {
+        tris.push([p00, p10, p01]);
+        tris.push([p10, p11, p01]);
+      }
+    }
+  }
+
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+
+  state.shatterMesh = tris.map((tri, i) => {
+    const mx = (tri[0].x + tri[1].x + tri[2].x) / 3;
+    const my = (tri[0].y + tri[1].y + tri[2].y) / 3;
+    const ang = Math.atan2(my - cy, mx - cx);
+    return {
+      pts: tri.map(p => ({ x: p.x, y: p.y })),
+      cx: mx,
+      cy: my,
+      dirX: Math.cos(ang),
+      dirY: Math.sin(ang),
+      jitter: Math.random() * Math.PI * 2,
+      band: i % 3,
+    };
+  });
+}
+
+// ═══════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════
+function spawnBurst(n) {
+  const cx = canvas.width/2, cy = canvas.height/2;
+  for (let i=0; i<n; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 8 * (1+state.bass*3);
+    state.particles.push({
+      x: cx + (Math.random()-0.5)*100,
+      y: cy + (Math.random()-0.5)*100,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      life: 1,
+      decay: 0.012 + Math.random()*0.02,
+      size: 2 + Math.random()*4 * (1+state.bass),
+      hue: (state.washHue + Math.random()*60) % 360,
+      trail: [],
+    });
+  }
+  if (state.particles.length > 600) state.particles.splice(0, state.particles.length-600);
+}
+
+function spawnAmbient() {
+  const drive = getVisualDrive();
+  if (state.energySmooth < 0.05 && drive < 0.08) return;
+  if (Math.random() > clamp(state.energySmooth * 0.25 + drive * 0.85, 0, 1)) return;
+  const edge = Math.floor(Math.random()*4);
+  let x,y;
+  if (edge===0) { x=Math.random()*canvas.width; y=-10; }
+  else if (edge===1) { x=canvas.width+10; y=Math.random()*canvas.height; }
+  else if (edge===2) { x=Math.random()*canvas.width; y=canvas.height+10; }
+  else { x=-10; y=Math.random()*canvas.height; }
+  const cx=canvas.width/2, cy=canvas.height/2;
+  const angle = Math.atan2(cy-y, cx-x) + (Math.random()-0.5)*0.8;
+  const speed = 1 + state.energySmooth*1.6 + drive*3.6;
+  state.particles.push({
+    x,y,
+    vx: Math.cos(angle)*speed,
+    vy: Math.sin(angle)*speed,
+    life: 1,
+    decay: 0.006 + Math.random()*0.012,
+    size: 1.5 + Math.random()*3,
+    hue: (state.washHue + Math.random()*90) % 360,
+    trail:[],
+  });
+}
+
+function updateParticles() {
+  const motion = state.motionScale;
+  const drive = getVisualDrive();
+  for (let i=state.particles.length-1; i>=0; i--) {
+    const p = state.particles[i];
+    p.trail.push({x:p.x, y:p.y});
+    if (p.trail.length > 8) p.trail.shift();
+    p.x += p.vx * (1 + state.energySmooth * 0.45 + drive * 0.9) * motion;
+    p.y += p.vy * (1 + state.energySmooth * 0.45 + drive * 0.9) * motion;
+    p.vx *= 0.985;
+    p.vy *= 0.985;
+    p.life -= p.decay * (0.7 + motion * 0.6);
+    if (p.life <= 0) { state.particles.splice(i,1); }
+  }
+}
+
+function drawParticles() {
+  for (const p of state.particles) {
+    // Trail
+    if (p.trail.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(p.trail[0].x, p.trail[0].y);
+      for (let k=1; k<p.trail.length; k++) ctx.lineTo(p.trail[k].x, p.trail[k].y);
+      ctx.strokeStyle = getColor(p.hue/360, p.life * 0.3);
+      ctx.lineWidth = p.size * 0.5;
+      ctx.stroke();
+    }
+    // Dot
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2);
+    ctx.fillStyle = getColor(p.hue/360, p.life * 0.9);
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════
+//  DRAW MODES
+// ═══════════════════════════════════════════
+
+// MODE 0: PARTICLES
+function drawModeParticles(clear=true) {
+  const fade = getBeatReactiveFade();
+  const drive = getVisualDrive();
+  // Fade
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  // Central pulsing ring
+  const cx = canvas.width/2, cy = canvas.height/2;
+  const r = 90 + drive * 640 * (0.7 + state.intensity * 0.8 + state.energyAccumulator * 0.7);
+  const rings = 3;
+  for (let ri=0; ri<rings; ri++) {
+    const rr = r * (1 - ri*0.2);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, 0, Math.PI*2);
+    ctx.strokeStyle = getColor(ri/rings, (0.6 - ri*0.15) * state.bass);
+    ctx.lineWidth = (2.3 - ri*0.45) * (0.8 + state.intensity * 0.5);
+    ctx.stroke();
+  }
+
+  spawnAmbient();
+  updateParticles();
+  drawParticles();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 4 + drive*14*(0.8 + state.intensity*0.5), 0, Math.PI*2);
+  ctx.fillStyle = getColor(0.5, 0.8);
+  ctx.fill();
+  ctx.restore();
+}
+
+// MODE 1: SLABS
+function drawModeSlabs(clear=true) {
+  const fade = getBeatReactiveFade();
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cols = 22;
+  const gap = Math.max(8, canvas.width * 0.008);
+  const usableW = canvas.width - gap * (cols + 1);
+  const colW = usableW / cols;
+  const centerY = canvas.height * 0.5;
+  const travel = 40 + state.highSmooth * 120 + state.intensity * 28;
+
+  for (let i=0; i<cols; i++) {
+    const idx = Math.floor((i / cols) * Math.max(1, state.bufferLen * 0.28));
+    const freq = state.dataArray ? ((state.dataArray[idx] || 0) / 255) : state.energySmooth;
+    const x = gap + i * (colW + gap);
+    const h = Math.max(18, (0.08 + freq * (0.7 + drive * 1.2)) * canvas.height * 0.56);
+    const y = centerY - h * 0.5;
+    const pulse = Math.sin(phaseTime * 2.2 + i * 0.8) * travel * (0.25 + state.highSmooth * 0.65 + drive * 0.2);
+
+    ctx.fillStyle = getColor(i / cols, 0.14 + freq * 0.5, freq);
+    ctx.fillRect(x, y + pulse * 0.18, colW, h);
+
+    ctx.strokeStyle = getColor(i / cols, 0.55 + freq * 0.35, freq);
+    ctx.lineWidth = 1 + state.highSmooth * 2.2;
+    ctx.strokeRect(x, y + pulse * 0.18, colW, h);
+
+    const innerH = h * (0.18 + state.midSmooth * 0.3);
+    ctx.fillStyle = getColor(i / cols, 0.7, freq);
+    ctx.fillRect(x, centerY - innerH * 0.5 - pulse, colW, innerH);
+
+    ctx.fillStyle = getColor(i / cols, 0.5, freq);
+    ctx.fillRect(x, centerY + h * 0.25 + pulse * 0.12, colW, innerH * 0.8);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(x, y + 4, colW, 2);
+  }
+
+  const railOffset = 24 + state.impactPulse * 28;
+  ctx.strokeStyle = `rgba(255,255,255,${0.12 + state.highSmooth * 0.18})`;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, centerY - railOffset);
+  ctx.lineTo(canvas.width, centerY - railOffset);
+  ctx.moveTo(0, centerY + railOffset);
+  ctx.lineTo(canvas.width, centerY + railOffset);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// MODE 2: TUNNEL
+function drawModeTunnel(clear=true) {
+  const fade = getBeatReactiveFade();
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cx=canvas.width/2, cy=canvas.height/2;
+  const layers = 14;
+  const maxSize = Math.min(canvas.width, canvas.height) * 0.9;
+  const baseRot = phaseTime * (0.16 + state.highSmooth * 0.12 + drive * 0.18);
+
+  for (let i=0; i<layers; i++) {
+    const t = i / (layers - 1);
+    const idx = Math.floor(t * Math.max(1, state.bufferLen * 0.32));
+    const freq = state.dataArray ? ((state.dataArray[idx] || 0) / 255) : state.energySmooth;
+    const size = maxSize * (0.12 + t * 0.88) * (1 + drive * (0.1 + (1 - t) * 0.22));
+    const rot = baseRot + i * 0.06 + state.impactPulse * 0.05;
+    const squash = 0.64 + state.midSmooth * 0.42;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    ctx.scale(1, squash);
+    ctx.strokeStyle = getColor(1 - t, 0.15 + freq * 0.55, freq);
+    ctx.lineWidth = 1 + (1 - t) * 2.8 + state.highSmooth * 1.2;
+    ctx.strokeRect(-size * 0.5, -size * 0.5, size, size);
+    ctx.restore();
+  }
+
+  const laneSpread = 60 + drive * 180;
+  ctx.strokeStyle = `rgba(255,255,255,${0.12 + state.energySmooth * 0.18})`;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(cx - laneSpread, 0);
+  ctx.lineTo(cx - laneSpread * 0.15, canvas.height);
+  ctx.moveTo(cx + laneSpread, 0);
+  ctx.lineTo(cx + laneSpread * 0.15, canvas.height);
+  ctx.stroke();
+
+  for (let i=0; i<8; i++) {
+    const y = (i / 7) * canvas.height;
+    const spread = laneSpread * (0.2 + i / 8);
+    ctx.strokeStyle = `rgba(255,255,255,${0.03 + i * 0.015 + state.highSmooth * 0.08})`;
+    ctx.beginPath();
+    ctx.moveTo(cx - spread, y);
+    ctx.lineTo(cx + spread, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = getColor(0.02, 0.85, drive);
+  ctx.fillRect(cx - 6 - drive * 10, cy - 6 - drive * 10, 12 + drive * 20, 12 + drive * 20);
+  ctx.restore();
+}
+
+// MODE 3: GRID
+function drawModeGrid(clear=true) {
+  const fade = getBeatReactiveFade();
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cols=24, rows=14;
+  const cw=canvas.width/cols, ch=canvas.height/rows;
+
+  for (let r=0; r<rows; r++) {
+    for (let c=0; c<cols; c++) {
+      const idx = Math.floor((c/cols)*state.bufferLen*0.5);
+      const freq = (state.dataArray[idx]||0)/255;
+      const distC = Math.abs(c-cols/2)/(cols/2);
+      const distR = Math.abs(r-rows/2)/(rows/2);
+      const dist = Math.sqrt(distC*distC+distR*distR)/1.414;
+
+      const val = freq * (1-dist*0.4) * (1+drive*1.5);
+      const size = Math.max(1, val * Math.min(cw,ch)*0.8);
+
+      const cx = c*cw + cw/2;
+      const cy_pos = r*ch + ch/2;
+
+      ctx.save();
+      ctx.translate(cx, cy_pos);
+      ctx.rotate(phaseTime*0.5*(distC+0.1) * (state.highSmooth+0.2 + drive * 0.45));
+      ctx.fillStyle = getColor(c/cols, val * 0.85, freq);
+      ctx.fillRect(-size/2, -size/2, size, size);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// MODE 4: CHAOS
+function drawModeChaos(clear=true) {
+  const fade = getBeatReactiveFade();
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  // Heavy trails
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cx=canvas.width/2, cy=canvas.height/2;
+
+  // Lissajous-like freq drawing
+  if (state.analyser) {
+    const freqData = state.dataArray;
+    ctx.beginPath();
+    for (let i=0; i<state.bufferLen; i+=2) {
+      const t = (i/state.bufferLen)*Math.PI*2;
+      const r = 100 + (freqData[i]/255)*300*(1+drive*1.5);
+      const twist = phaseTime*1.5 + state.midSmooth*3 + drive * 1.8;
+      const x = cx + Math.cos(t*3.1+twist)*r*0.8 + Math.sin(t*2+phaseTime)*r*0.2;
+      const y = cy + Math.sin(t*2.9+twist*0.7)*r*0.7 + Math.cos(t+phaseTime*0.8)*r*0.3;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle = getColor((phaseTime*0.1)%1, 0.4+state.energySmooth*0.4 + drive * 0.15);
+    ctx.lineWidth = 0.8+drive*2;
+    ctx.stroke();
+  }
+
+  spawnAmbient();
+  updateParticles();
+  drawParticles();
+
+  // Edge streaks on beat
+  if (state.beatDetected) {
+    for (let i=0; i<8; i++) {
+      const angle = Math.random()*Math.PI*2;
+      const len = 100+Math.random()*300;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo(cx+Math.cos(angle)*len*2, cy+Math.sin(angle)*len*2);
+      ctx.strokeStyle = getColor(Math.random(), 0.3+state.bass*0.5);
+      ctx.lineWidth = 0.5+Math.random()*1.5;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// MODE 5: VORTEX
+function drawModeVortex(clear=true) {
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  const fade = getBeatReactiveFade(0.62);
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${clamp(fade, 0.02, 0.6)})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+  const maxR = Math.min(canvas.width, canvas.height) * 0.56;
+  const lines = Math.floor(180 + state.sectionIntensityMul * 120);
+  const beatTwist = state.vortexBeatTwist;
+  const baseSpin = phaseTime * (0.25 + state.visualMotion * 0.32 + state.midSmooth * 0.7 + drive * 0.3);
+
+  for (let i=0; i<lines; i++) {
+    const tLine = i / Math.max(1, lines - 1);
+    const freqPos = tLine * 0.72;
+    const freq = sampleSpectrumRange(freqPos, freqPos + 0.015);
+    const perLineSpin = phaseTime * (0.14 + freq * 2.2 + tLine * 1.25 + drive * 0.22);
+    const alpha = 0.06 + freq * 0.4 + state.sectionIntensityMul * 0.05;
+    const lw = 0.35 + freq * 1.5 + state.highSmooth * 0.6;
+    const baseAngle = tLine * Math.PI * 2 + baseSpin + perLineSpin + beatTwist;
+
+    ctx.beginPath();
+    const segments = 24;
+    for (let s=0; s<=segments; s++) {
+      const u = s / segments;
+      const rr = Math.pow(u, 0.84) * maxR;
+      const spiral = rr * (0.024 + drive * 0.02 + state.sectionIntensityMul * 0.006);
+      const deform = Math.sin(rr * 0.018 + phaseTime * (1.8 + freq * 1.7) + i * 0.07) * (6 + 34 * freq * (0.6 + state.sectionIntensityMul * 0.5 + drive * 0.25));
+      const a = baseAngle + spiral * 0.01 + deform * 0.0032;
+      const x = cx + Math.cos(a) * (rr + deform * 0.26);
+      const y = cy + Math.sin(a) * (rr + deform * 0.26);
+      if (s === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle = getColor((tLine + state.time * 0.04) % 1, alpha, freq);
+    ctx.lineWidth = lw;
+    ctx.stroke();
+  }
+
+  if (state.beatDetected) {
+    spawnBurst(8 + Math.floor(24 * state.sectionIntensityMul));
+  }
+
+  spawnAmbient();
+  updateParticles();
+  drawParticles();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 4 + state.subBassSmooth * 22, 0, Math.PI * 2);
+  ctx.fillStyle = getColor(0.08, 0.75, state.subBassSmooth);
+  ctx.fill();
+  ctx.restore();
+
+  state.vortexBeatTwist *= 0.82;
+}
+
+// MODE 6: PULSE
+function drawModePulse(clear=true) {
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  const fade = getBeatReactiveFade(0.7);
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${clamp(fade, 0.025, 0.65)})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+  const maxR = Math.hypot(canvas.width * 0.5, canvas.height * 0.5) * 1.05;
+
+  if (state.musicState === 'CHILL') {
+    if (state.pulseWaves.length === 0 || (Math.random() < 0.01 && state.pulseWaves.length < 2)) {
+      spawnPulseWave(1, 0.72);
+    }
+  } else if (Math.random() < (0.01 + state.energySmooth * 0.015 + drive * 0.06) && state.pulseWaves.length < 10) {
+    spawnPulseWave(Math.floor(Math.random() * 3), 0.8 + Math.random() * 0.4);
+  }
+
+  const bassSpec = sampleSpectrumRange(0.0, 0.08);
+  const midSpec = sampleSpectrumRange(0.12, 0.36);
+  const highSpec = sampleSpectrumRange(0.42, 0.82);
+
+  for (let i = state.pulseWaves.length - 1; i >= 0; i--) {
+    const w = state.pulseWaves[i];
+    const bandStrength = w.band === 0 ? bassSpec : w.band === 1 ? midSpec : highSpec;
+    const energy = clamp((bandStrength * 0.6 + state.energySmooth * 0.2 + drive * 0.85) * (0.35 + state.sectionIntensityMul * 0.75), 0, 1.3);
+
+    w.r += w.speed * (0.45 + state.visualMotion * 0.55);
+    w.life -= (state.musicState === 'CHILL' ? 0.008 : 0.015) * (0.7 + state.visualMotion * 0.45);
+
+    const alpha = clamp(w.life * (0.26 + energy * 0.55), 0, 0.95);
+    const jitterAmp = (8 + energy * 42 + w.roughness) * (0.25 + state.sectionIntensityMul * 0.6);
+    const ripple = phaseTime * (1.6 + energy * 2.6 + drive * 0.8);
+
+    ctx.beginPath();
+    const segs = 84;
+    for (let s = 0; s <= segs; s++) {
+      const a = (s / segs) * Math.PI * 2;
+      const specShift = 0.006 + ((Math.sin(a * 3 + w.seed) + 1) * 0.5) * 0.02;
+      const localSpec = sampleSpectrumRange((a / (Math.PI * 2)) * 0.7, (a / (Math.PI * 2)) * 0.7 + specShift);
+      const organic = Math.sin(a * (3 + w.band * 1.4) + ripple + w.seed) * jitterAmp;
+      const spectral = (localSpec - 0.5) * 2 * jitterAmp * 0.55;
+      const rr = w.r + organic + spectral;
+      const x = cx + Math.cos(a) * rr;
+      const y = cy + Math.sin(a) * rr;
+      if (s === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle = getPulseBandColor(w.band, alpha, energy);
+    ctx.lineWidth = w.thickness + energy * 1.6;
+    ctx.stroke();
+
+    if (w.r > maxR || w.life <= 0.02) state.pulseWaves.splice(i, 1);
+  }
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2 + (state.energySmooth * 0.35 + drive * 0.9) * 8, 0, Math.PI * 2);
+  ctx.fillStyle = getAlternatingFlashTint(0.22 + state.subBassSmooth * 0.3, 8, 74);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// MODE 7: SHATTER
+function drawModeShatter(clear=true) {
+  const drive = getVisualDrive();
+  const phaseTime = state.time + state.beatPhase;
+  const fade = getBeatReactiveFade(0.75);
+  if (clear) {
+    ctx.fillStyle = `rgba(0,0,0,${clamp(fade, 0.03, 0.7)})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  if (!state.shatterMesh.length) initShatterMesh();
+
+  ctx.save();
+  ctx.globalAlpha = getSectionDrawAlpha();
+
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+  const bassSpec = sampleSpectrumRange(0.0, 0.08);
+  const midSpec = sampleSpectrumRange(0.12, 0.36);
+  const highSpec = sampleSpectrumRange(0.45, 0.82);
+
+  const beatExplode = state.shatterBeatImpulse;
+  const dropExplode = state.shatterDropImpulse;
+
+  for (let i=0; i<state.shatterMesh.length; i++) {
+    const tri = state.shatterMesh[i];
+    const bandV = tri.band === 0 ? bassSpec : tri.band === 1 ? midSpec : highSpec;
+    const pulse = clamp((bandV * 0.6 + state.energySmooth * 0.15 + drive * 0.9) * (0.25 + state.sectionIntensityMul * 0.85), 0, 1.2);
+
+    const dx0 = tri.cx - cx;
+    const dy0 = tri.cy - cy;
+    const distN = clamp(Math.hypot(dx0, dy0) / Math.hypot(cx, cy), 0, 1);
+
+    const beatOffset = beatExplode * (10 + distN * 38) * (0.6 + pulse * 0.6);
+    const dropOffset = dropExplode * (28 + distN * 120) * (0.7 + pulse * 0.8);
+    const jitter = Math.sin(phaseTime * (4.2 + pulse * 1.3) + tri.jitter) * (1.5 + state.highSmooth * 3.2 + drive * 2.2);
+
+    const offX = tri.dirX * (beatOffset + dropOffset) + Math.cos(tri.jitter * 1.7) * jitter;
+    const offY = tri.dirY * (beatOffset + dropOffset) + Math.sin(tri.jitter * 1.5) * jitter;
+
+    const localHueT = (tri.band * 0.33 + state.time * 0.03 + distN * 0.08) % 1;
+    ctx.beginPath();
+    ctx.moveTo(tri.pts[0].x + offX, tri.pts[0].y + offY);
+    ctx.lineTo(tri.pts[1].x + offX, tri.pts[1].y + offY);
+    ctx.lineTo(tri.pts[2].x + offX, tri.pts[2].y + offY);
+    ctx.closePath();
+
+    ctx.fillStyle = getColor(localHueT, 0.08 + pulse * 0.42, pulse);
+    ctx.fill();
+    ctx.strokeStyle = getColor(localHueT, 0.16 + pulse * 0.55, pulse);
+    ctx.lineWidth = 0.6 + pulse * 1.3;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  state.shatterBeatImpulse *= 0.78;
+  state.shatterDropImpulse *= 0.87;
+}
+
+// MODE 8: ALL (auto-switching modes)
+function drawModeAll() {
+  const dt = state.frameDtMs || 16;
+  const now = performance.now();
+  const hasRecentBpm = state.bpm > 50 && state.bpm < 220 && (now - state.lastBpmAt) < 5000;
+
+  let targetInterval;
+  if (hasRecentBpm) {
+    const beatMs = 60000 / state.bpm;
+    if (state.energySmooth > 0.55) targetInterval = beatMs * 0.5;
+    else if (state.energySmooth > 0.35) targetInterval = beatMs;
+    else if (state.energySmooth > 0.2) targetInterval = beatMs * 2;
+    else targetInterval = beatMs * 4;
+  } else {
+    targetInterval = 1300 - state.energySmooth * 700 - state.highSmooth * 260;
+  }
+
+  targetInterval = clamp(targetInterval, 260, 2200);
+  state.allSwitchIntervalMs += (targetInterval - state.allSwitchIntervalMs) * 0.2;
+  state.allSwitchElapsedMs += dt;
+
+  if (state.allSwitchElapsedMs >= state.allSwitchIntervalMs) {
+    while (state.allSwitchElapsedMs >= state.allSwitchIntervalMs) {
+      state.allSwitchElapsedMs -= state.allSwitchIntervalMs;
+      state.allCurrentMode = (state.allCurrentMode + 1) % 7;
+    }
+    el.modeLabel.textContent = `MODE: ALL → ${state.modeNames[state.allCurrentMode]}`;
+  }
+
+  // Keep black background, render one active submode at a time
+  ctx.fillStyle = `rgba(0,0,0,${0.09 + state.energySmooth*0.08})`;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  switch (state.allCurrentMode) {
+    case 0: drawModeParticles(false); break;
+    case 1: drawModeTunnel(false); break;
+    case 2: drawModeGrid(false); break;
+    case 3: drawModeChaos(false); break;
+    case 4: drawModeVortex(false); break;
+    case 5: drawModePulse(false); break;
+    case 6: drawModeShatter(false); break;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  EFFECTS
+// ═══════════════════════════════════════════
+function drawEffects() {
+  const live = 1 - state.idleBlend;
+  const now = performance.now();
+  const sectionMul = state.sectionIntensityMul;
+  const brightness = state.visualBrightness;
+
+  if (!state.strobeEnabled) {
+    state.flashOpacity = 0;
+    state.microFlashOpacity = 0;
+    state.overdriveWhite = 0;
+    state.floodFrames = 0;
+    state.strobeOpacity = 0;
+    state.strobePulseUntil = 0;
+    state.hardStrobeFrames = 0;
+    state.autoWhiteoutFrames = 0;
+    state.whiteoutDecay = 0;
+    el.flash.style.opacity = 0;
+    el.strobe.style.opacity = 0;
+  }
+
+  // Auto blackout (music-driven)
+  if (state.autoBlackoutFrames > 0) {
+    const a = 1 - (state.autoBlackoutFrames / 12);
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,0,${clamp(a, 0, 1)})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.autoBlackoutFrames -= 1;
+    el.strobe.style.opacity = 0;
+    el.flash.style.opacity = 0;
+    return;
+  }
+
+  // Auto whiteout (music-driven)
+  if (state.strobeEnabled && state.autoWhiteoutFrames > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.autoWhiteoutFrames -= 1;
+    if (state.autoWhiteoutFrames === 0) state.whiteoutDecay = 1;
+    el.strobe.style.opacity = 0;
+    el.flash.style.opacity = 0;
+    return;
+  }
+
+  if (state.strobeEnabled && state.whiteoutDecay > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255,255,255,${state.whiteoutDecay})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.whiteoutDecay *= 0.78; // ~120ms tail
+    if (state.whiteoutDecay < 0.02) state.whiteoutDecay = 0;
+  }
+
+  // Flash on beat
+  if (state.strobeEnabled && state.flashOpacity > 0) {
+    const hue = getPaletteHue(10);
+    el.flash.style.background = state.flashColorPhase && hue !== null ? `hsl(${hue},100%,62%)` : '#ffffff';
+    el.flash.style.opacity = Math.min(1, state.flashOpacity * (0.8 + live * 1.15) * state.intensity * sectionMul * brightness);
+    state.flashOpacity *= 0.52;
+    if (state.flashOpacity < 0.005) {
+      state.flashOpacity = 0;
+      el.flash.style.opacity = 0;
+    }
+  }
+
+  // Color wash
+  if (state.washOpacity > 0) {
+    const minDroneWash = state.musicState === 'SILENCE' ? 0 : 0.04;
+    const wash = Math.max(state.washOpacity, minDroneWash);
+    el.wash.style.opacity = Math.min(1, wash * (0.35 + live * 0.7) * brightness);
+    const hue = getPaletteHue();
+    el.wash.style.background = hue === null ? '#ffffff' : `hsl(${hue},100%,50%)`;
+    state.washOpacity *= state.musicState === 'SILENCE' ? 0.84 : 0.9;
+    if (state.washOpacity < 0.01) {
+      state.washOpacity = 0;
+      el.wash.style.opacity = 0;
+    }
+  }
+
+  // Strobe
+  if (state.strobeEnabled && state.running && state.idleBlend < 0.95) {
+    if (state.strobeMode === 2) {
+      // HARD: one immediate full-white frame per trigger
+      if (state.hardStrobeFrames > 0) {
+        const h = getPaletteHue(24);
+        el.strobe.style.background = state.flashColorPhase && h !== null ? `hsl(${h},100%,66%)` : '#ffffff';
+        el.strobe.style.opacity = 1;
+        state.hardStrobeFrames -= 1;
+      } else {
+        el.strobe.style.opacity = 0;
+      }
+    } else {
+    const remain = Math.max(0, state.strobePulseUntil - now);
+    if (remain > 0) {
+      const env = Math.pow(remain / state.strobePulseMs, 0.55);
+        const h = getPaletteHue(24);
+        el.strobe.style.background = state.flashColorPhase && h !== null ? `hsl(${h},100%,66%)` : '#ffffff';
+        const strobeBase = 1.05 + state.highSmooth * 1.9 + state.energySmooth * 0.65;
+        el.strobe.style.opacity = Math.min(1, env * state.strobeOpacity * strobeBase * state.intensity * sectionMul * brightness);
+    } else {
+      el.strobe.style.opacity = 0;
+      state.strobeOpacity = 0;
+    }
+    }
+  } else {
+    state.strobeOpacity = 0;
+    state.strobePulseUntil = 0;
+    state.hardStrobeFrames = 0;
+    el.strobe.style.opacity = 0;
+  }
+
+  // Micro flashes from highs
+  if (state.strobeEnabled && state.microFlashOpacity > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = getAlternatingFlashTint(Math.min(1, state.microFlashOpacity * 0.56 * brightness), 10, 74);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.microFlashOpacity *= 0.45;
+  }
+
+  // Global beat pulse: short additive glow over whole scene
+  if (state.strobeEnabled && state.impactPulse > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const glow = Math.min(1, state.impactPulse);
+    const grad = ctx.createRadialGradient(
+      canvas.width * 0.5,
+      canvas.height * 0.5,
+      0,
+      canvas.width * 0.5,
+      canvas.height * 0.5,
+      Math.max(canvas.width, canvas.height) * 0.75
+    );
+    grad.addColorStop(0, getAlternatingFlashTint(0.14 * glow * brightness, 0, 78));
+    grad.addColorStop(0.35, getAlternatingFlashTint(0.06 * glow * brightness, 18, 68));
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.impactPulse *= 0.84;
+  }
+
+  // Strong-beat overdrive: can push whole frame to white
+  if (state.strobeEnabled && state.overdriveWhite > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = getAlternatingFlashTint(Math.min(1, state.overdriveWhite * (0.34 + state.intensity * sectionMul * 0.24) * brightness), 6, 84);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.overdriveWhite *= 0.58;
+  }
+
+  // Full-screen color flood for extreme bass (~2 frames)
+  if (state.strobeEnabled && state.floodFrames > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = state.floodHue === null
+      ? `rgba(255,255,255,${0.34 + state.intensity * sectionMul * 0.14 * brightness})`
+      : `hsla(${state.floodHue},100%,58%,${0.34 + state.intensity * sectionMul * 0.14 * brightness})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    state.floodFrames -= 1;
+  }
+
+  // Grid warp with bass
+  el.grid.style.opacity = (0.25 + state.midSmooth*0.55 + state.impactPulse*0.2) * (0.55 + live*0.6);
+  const gshift = state.bassSmooth * 14 + state.impactPulse * 10;
+  el.grid.style.backgroundSize = `${60+gshift}px ${60+gshift}px`;
+
+  if (brightness < 0.995) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,0,${clamp(1 - brightness, 0, 0.95)})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════
+//  METERS UI
+// ═══════════════════════════════════════════
+function updateMeters() {
+  el.bassFill.style.width = (state.bassSmooth*100)+'%';
+  el.midFill.style.width = (state.midSmooth*100)+'%';
+  el.highFill.style.width = (state.highSmooth*100)+'%';
+
+  // BPM meter (normalized around club range 60-180)
+  const now = performance.now();
+  const bpmForUi = Math.round(state.bpmSmooth || 0);
+  const hasRecentBpm = bpmForUi > 50 && bpmForUi < 220 && (now - state.lastBpmAt) < 8000;
+  const bpmTarget = hasRecentBpm ? bpmForUi : 0;
+  state.bpmSmooth += (bpmTarget - state.bpmSmooth) * 0.18;
+
+  const bpmNorm = Math.max(0, Math.min(1, (state.bpmSmooth - 60) / 120));
+  el.bpmFill.style.width = (bpmNorm * 100) + '%';
+  el.bpmValue.textContent = hasRecentBpm ? `${Math.round(state.bpmSmooth)}` : '--';
+  el.energyState.textContent = state.musicState;
+
+  // BPM in status
+  const pName = state.presets[state.presetIndex].name;
+  if (hasRecentBpm) {
+    el.status.textContent = `● LIVE  ${Math.round(state.bpmSmooth)} BPM  C${Math.round(state.bpmConfidence*100)}%  ${state.musicState}  ${pName}`;
+  } else {
+    el.status.textContent = `● LIVE  ${state.musicState}  ${pName}`;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════
+let lastFrameTime = performance.now();
+function loop(now = performance.now()) {
+  requestAnimationFrame(loop);
+  const dtMs = Math.min(50, Math.max(0.001, now - lastFrameTime));
+  lastFrameTime = now;
+  state.frameDtMs = dtMs;
+  state.time += dtMs / 1000;
+  state.beatPulse *= state.beatPulseDecay;
+  if (state.beatPulse < 0.001) state.beatPulse = 0;
+  state.beatPhase += state.beatPulse * 0.15;
+
+  if (state.running && state.analyser) {
+    MainController.update();
+
+    // Silence mode: if low energy persists for ~2s, fade into idle behavior
+    if (state.energySmooth < state.silenceThreshold) state.silenceMs += dtMs;
+    else state.silenceMs = Math.max(0, state.silenceMs - dtMs * 2.2);
+
+    state.idleTarget = state.silenceMs >= state.silenceHoldMs ? 1 : 0;
+    state.idleBlend += (state.idleTarget - state.idleBlend) * 0.06;
+    state.motionScale = (1 - state.idleBlend * 0.65) * state.visualMotion;
+  } else {
+    // Idle animation
+    state.bass = 0.05+Math.sin(state.time*0.8)*0.03;
+    state.subBass = state.bass * 0.8;
+    state.subBassSmooth = state.subBass;
+    state.bassSmooth = state.bass;
+    state.midSmooth = 0.03+Math.sin(state.time*1.3)*0.02;
+    state.highSmooth = 0.02+Math.sin(state.time*2.1)*0.015;
+    state.energySmooth = 0.04;
+    state.onsetPulse = 0;
+    state.idleBlend = 1;
+    state.motionScale = 0.25;
+    state.energyAccumulator = 0;
+    state.visualBrightness += (0.08 - state.visualBrightness) * 0.08;
+    state.visualMotion += (0.3 - state.visualMotion) * 0.08;
+  }
+
+  updateSectionLabel();
+
+  // Draw
+  switch(state.mode) {
+    case 0: drawModeParticles(); break;
+    case 1: drawModeTunnel(); break;
+    case 2: drawModeGrid(); break;
+    case 3: drawModeChaos(); break;
+    case 4: drawModeVortex(); break;
+    case 5: drawModePulse(); break;
+    case 6: drawModeShatter(); break;
+    case 7: drawModeAll(); break;
+  }
+
+  LightRenderer.draw();
+  if (state.running) updateMeters();
+}
+loop();
+
+// ═══════════════════════════════════════════
+//  UI / CONTROLS
+// ═══════════════════════════════════════════
+el.btnStart.addEventListener('click', async () => {
+  if (!state.running) await startAudio(); else await stopAudio();
+});
+
+el.btnSource.addEventListener('click', async () => {
+  state.sourceMode = (state.sourceMode + 1) % state.sourceNames.length;
+  el.btnSource.textContent = `SOURCE: ${state.sourceNames[state.sourceMode]}`;
+  if (!state.running) el.btnStart.textContent = sourceStartLabel();
+
+  // If already live, re-open with the new source immediately
+  if (state.running) await startAudio();
+});
+
+el.btnMode.addEventListener('click', () => {
+  state.mode = (state.mode+1) % state.modeNames.length;
+  state.particles = [];
+  const btn = el.btnMode;
+  btn.textContent = `MODE: ${state.modeNames[state.mode]}`;
+  el.modeLabel.textContent = state.mode === 7
+    ? `MODE: ALL → ${state.modeNames[state.allCurrentMode]}`
+    : `MODE: ${state.modeNames[state.mode]}`;
+});
+
+el.btnColor.addEventListener('click', () => {
+  state.colorMode = (state.colorMode+1) % state.colorNames.length;
+  el.btnColor.textContent = `COLOR: ${state.colorNames[state.colorMode]}`;
+});
+
+el.btnStrobe.addEventListener('click', () => {
+  state.strobeMode = 2;
+  state.beatDivIndex = 2;
+  state.strobeEnabled = !state.strobeEnabled;
+  const btn = el.btnStrobe;
+  btn.textContent = `STROBE: ${state.strobeEnabled ? 'ON' : 'OFF'}`;
+  btn.classList.toggle('active', state.strobeEnabled);
+  btn.classList.toggle('danger', state.strobeEnabled);
+});
+
+el.btnFs.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// Auto-start on first click (idle state)
+el.idle.addEventListener('click', startAudio);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  switch(e.key) {
+    case ' ': e.preventDefault(); if (!state.running) startAudio(); else stopAudio(); break;
+    case 'm': case 'M':
+      state.mode = (state.mode+1) % state.modeNames.length;
+      state.particles = [];
+      el.btnMode.textContent = `MODE: ${state.modeNames[state.mode]}`;
+      el.modeLabel.textContent = state.mode === 7
+        ? `MODE: ALL → ${state.modeNames[state.allCurrentMode]}`
+        : `MODE: ${state.modeNames[state.mode]}`;
+      break;
+    case 'c': case 'C':
+      state.colorMode = (state.colorMode+1) % state.colorNames.length;
+      el.btnColor.textContent = `COLOR: ${state.colorNames[state.colorMode]}`;
+      break;
+    case 's': case 'S':
+      state.strobeMode = 2;
+      state.beatDivIndex = 2;
+      state.strobeEnabled = !state.strobeEnabled;
+      el.btnStrobe.textContent = `STROBE: ${state.strobeEnabled?'ON':'OFF'}`;
+      el.btnStrobe.classList.toggle('active', state.strobeEnabled);
+      el.btnStrobe.classList.toggle('danger', state.strobeEnabled);
+      break;
+    case 'a': case 'A':
+      state.sourceMode = (state.sourceMode + 1) % state.sourceNames.length;
+      el.btnSource.textContent = `SOURCE: ${state.sourceNames[state.sourceMode]}`;
+      if (!state.running) el.btnStart.textContent = sourceStartLabel();
+      if (state.running) startAudio();
+      break;
+    case 'g': case 'G':
+      MainController.toggleDebug();
+      break;
+    case 'f': case 'F':
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+      else document.exitFullscreen();
+      break;
+  }
+});
+
+// Mouse show/hide UI
+let uiTimeout;
+function showUI() {
+  document.body.classList.add('ui-visible');
+  el.ui.classList.add('visible');
+  el.meters.classList.add('visible');
+  el.modeLabel.classList.add('visible');
+  clearTimeout(uiTimeout);
+  uiTimeout = setTimeout(() => {
+    document.body.classList.remove('ui-visible');
+    el.ui.classList.remove('visible');
+    el.meters.classList.remove('visible');
+    el.modeLabel.classList.remove('visible');
+  }, 3000);
+}
+document.addEventListener('mousemove', showUI);
+document.addEventListener('touchstart', showUI);
+</script>
+</body>
+</html>

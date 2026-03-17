@@ -1,0 +1,3 @@
+Windows: Dvojklik na start.bat, nejdřív použije přibalený python-portable a pak zkusí porty 8080/8081/8082 přes localhost.
+Mac: Dvojklik na start.command (případně jednou nastav chmod +x start.command), zkusí porty 8080/8081/8082 a otevře vizualizér přes localhost.
+Struktura: dj-visualizer.html, start.bat, start.command, python-portable/, README.txt; když na Windows selže portable Python, zkusí systémový Python nebo Node.
