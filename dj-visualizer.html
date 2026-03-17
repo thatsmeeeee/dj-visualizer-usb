@@ -168,6 +168,36 @@
     box-shadow: none;
   }
 
+  #tune-panel {
+    position: fixed;
+    left: 22px;
+    top: 22px;
+    z-index: 101;
+    width: 240px;
+    border: 1px solid rgba(0,240,255,0.28);
+    background: rgba(0,0,0,0.66);
+    padding: 10px 10px 8px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  #tune-panel.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .tune-row { margin-bottom: 8px; }
+  .tune-row label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(220,255,255,0.9);
+    margin-bottom: 4px;
+  }
+  .tune-row input[type="range"] { width: 100%; }
+
   /* ── LEVEL METERS ── */
   #meters {
     position: fixed;
@@ -368,12 +398,30 @@
   <button class="btn" id="btn-start">▶ START SYSTEM</button>
   <button class="btn" id="btn-source">SOURCE: SYSTEM</button>
   <div class="sep"></div>
+  <button class="btn" id="btn-preset">PRESET: CLUB</button>
   <button class="btn" id="btn-mode">MODE: ALL</button>
   <button class="btn" id="btn-color">COLOR: MONO</button>
+  <button class="btn active" id="btn-quality">QUALITY: AUTO</button>
+  <button class="btn" id="btn-tune">TUNE</button>
   <button class="btn active danger" id="btn-strobe">STROBE: ON</button>
   <button class="btn" id="btn-fs">⛶ FULLSCREEN</button>
   <div class="sep"></div>
   <span id="status">● STANDBY</span>
+</div>
+
+<div id="tune-panel">
+  <div class="tune-row">
+    <label for="tune-sens"><span>SENSITIVITY</span><span id="tune-sens-v">1.00</span></label>
+    <input id="tune-sens" type="range" min="0.60" max="1.60" step="0.01" value="1.00">
+  </div>
+  <div class="tune-row">
+    <label for="tune-rate"><span>FLASH RATE</span><span id="tune-rate-v">1.00</span></label>
+    <input id="tune-rate" type="range" min="0.60" max="1.40" step="0.01" value="1.00">
+  </div>
+  <div class="tune-row">
+    <label for="tune-safe"><span>SAFETY</span><span id="tune-safe-v">1.00</span></label>
+    <input id="tune-safe" type="range" min="0.60" max="1.40" step="0.01" value="1.00">
+  </div>
 </div>
 
 <script>
@@ -471,18 +519,23 @@ const state = {
   whiteoutDecay: 0,
   lowEnergyMs: 0,
   lastWhiteoutAt: 0,
-  flashBudget: { IDLE: 0, GROOVE: 3, BUILD: 6, DROP: 11, BREAKDOWN: 2 },
-
-  // Tuning preset (single CLUB config)
+  // Presets
   presetIndex: 0,
   presets: [
-    { name: 'CLUB', fftSize: 2048, smoothing: 0.55, beatK: 1.35, highK: 1.75, beatCooldownMs: 120, bpmConfidenceMin: 0.25, maxStrobeHz: 10.0 },
+    { name: 'CLUB', fftSize: 2048, smoothing: 0.55, beatK: 1.35, highK: 1.75, beatCooldownMs: 120, bpmConfidenceMin: 0.25, maxStrobeHz: 10.0, qualityAuto: true, qualityLevel: 1, tuneSensitivity: 1.00, tuneFlashRate: 1.00, tuneSafety: 1.00 },
+    { name: 'OPEN AIR', fftSize: 4096, smoothing: 0.60, beatK: 1.25, highK: 1.55, beatCooldownMs: 110, bpmConfidenceMin: 0.20, maxStrobeHz: 11.0, qualityAuto: true, qualityLevel: 2, tuneSensitivity: 1.10, tuneFlashRate: 1.08, tuneSafety: 0.95 },
+    { name: 'LOW POWER', fftSize: 1024, smoothing: 0.50, beatK: 1.45, highK: 1.90, beatCooldownMs: 135, bpmConfidenceMin: 0.28, maxStrobeHz: 8.0, qualityAuto: false, qualityLevel: 0, tuneSensitivity: 0.92, tuneFlashRate: 0.86, tuneSafety: 1.12 },
   ],
   beatK: 1.35,
   highK: 1.75,
   beatCooldownMs: 120,
   bpmConfidenceMin: 0.25,
+  baseMaxStrobeHz: 10.0,
   maxStrobeHz: 10.0,
+  tuneSensitivity: 1.00,
+  tuneFlashRate: 1.00,
+  tuneSafety: 1.00,
+  tunePanelVisible: false,
 
   // Music states
   musicState: 'GROOVE', // CHILL | GROOVE | BUILD | DROP
@@ -576,22 +629,55 @@ const state = {
   // State hold times
   stateHoldTimes: { IDLE: 1500, BUILD: 3000, DROP: 2000, GROOVE: 2000, BREAKDOWN: 4000 },
   lastStateSwitchSec: 0,
+
+  // Performance governor (auto quality)
+  qualityLevel: 1, // 0=low 1=med 2=high
+  qualityAuto: true,
+  qualityNames: ['LOW', 'MED', 'HIGH'],
+  qualityProfiles: [
+    { renderScale: 0.72, maxParticles: 280, trailLength: 4, burstMul: 0.50, analysisHz: 70, pulseWaveMax: 28, pulseSegs: 44, vortexLinesBase: 90, vortexLinesBoost: 60, gridCols: 14, gridRows: 8, chaosStep: 4, chaosStreaks: 4, effectsLevel: 0, gridWarpMs: 120, shatterCols: 10, shatterRows: 6 },
+    { renderScale: 0.85, maxParticles: 420, trailLength: 6, burstMul: 0.75, analysisHz: 85, pulseWaveMax: 42, pulseSegs: 64, vortexLinesBase: 130, vortexLinesBoost: 90, gridCols: 18, gridRows: 10, chaosStep: 3, chaosStreaks: 6, effectsLevel: 1, gridWarpMs: 80, shatterCols: 13, shatterRows: 8 },
+    { renderScale: 1.00, maxParticles: 600, trailLength: 8, burstMul: 1.00, analysisHz: 100, pulseWaveMax: 64, pulseSegs: 84, vortexLinesBase: 180, vortexLinesBoost: 120, gridCols: 24, gridRows: 14, chaosStep: 2, chaosStreaks: 8, effectsLevel: 2, gridWarpMs: 0, shatterCols: 16, shatterRows: 10 },
+  ],
+  upgradeLockMs: 5000,
+  qualityLockUntilMs: 0,
+  governorWarmupMs: 2000,
+  governorWarmupUntilMs: 0,
+  governorPaused: false,
+  fpsEma: 60,
+  refreshEmaMs: 1000 / 60,
+  minRefreshHz: 60,
+  maxRefreshHz: 120,
+  lastPerfEvalAt: 0,
+  renderScale: 1,
+  statusOverrideUntilMs: 0,
+  lastGridWarpAt: 0,
 };
 
 // ═══════════════════════════════════════════
 //  CANVAS SETUP
 // ═══════════════════════════════════════════
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });
 const el = {
   idle: document.getElementById('idle'),
   status: document.getElementById('status'),
   btnStart: document.getElementById('btn-start'),
   btnSource: document.getElementById('btn-source'),
+  btnPreset: document.getElementById('btn-preset'),
   btnMode: document.getElementById('btn-mode'),
   btnColor: document.getElementById('btn-color'),
+  btnQuality: document.getElementById('btn-quality'),
+  btnTune: document.getElementById('btn-tune'),
   btnStrobe: document.getElementById('btn-strobe'),
   btnFs: document.getElementById('btn-fs'),
+  tunePanel: document.getElementById('tune-panel'),
+  tuneSens: document.getElementById('tune-sens'),
+  tuneRate: document.getElementById('tune-rate'),
+  tuneSafe: document.getElementById('tune-safe'),
+  tuneSensV: document.getElementById('tune-sens-v'),
+  tuneRateV: document.getElementById('tune-rate-v'),
+  tuneSafeV: document.getElementById('tune-safe-v'),
   ui: document.getElementById('ui'),
   meters: document.getElementById('meters'),
   modeLabel: document.getElementById('mode-label'),
@@ -611,6 +697,122 @@ const el = {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
+}
+
+function setStatusOverride(text, durationMs = 1800) {
+  el.status.textContent = text;
+  state.statusOverrideUntilMs = performance.now() + durationMs;
+}
+
+function qualityButtonLabel() {
+  return state.qualityAuto
+    ? 'QUALITY: AUTO'
+    : `QUALITY: ${state.qualityNames[state.qualityLevel]}`;
+}
+
+function refreshQualityButton() {
+  el.btnQuality.textContent = qualityButtonLabel();
+  el.btnQuality.classList.toggle('active', state.qualityAuto);
+}
+
+function refreshPresetButton() {
+  el.btnPreset.textContent = `PRESET: ${state.presets[state.presetIndex].name}`;
+}
+
+function updateTuneUi() {
+  el.tuneSens.value = state.tuneSensitivity.toFixed(2);
+  el.tuneRate.value = state.tuneFlashRate.toFixed(2);
+  el.tuneSafe.value = state.tuneSafety.toFixed(2);
+  el.tuneSensV.textContent = state.tuneSensitivity.toFixed(2);
+  el.tuneRateV.textContent = state.tuneFlashRate.toFixed(2);
+  el.tuneSafeV.textContent = state.tuneSafety.toFixed(2);
+}
+
+function setTunePanelVisible(visible) {
+  state.tunePanelVisible = !!visible;
+  el.tunePanel.classList.toggle('visible', state.tunePanelVisible);
+  el.btnTune.classList.toggle('active', state.tunePanelVisible);
+}
+
+function getQualityProfile(level = state.qualityLevel) {
+  const i = clamp(Math.round(level), 0, state.qualityProfiles.length - 1);
+  return state.qualityProfiles[i];
+}
+
+function applyQuality(level, forceResize = false) {
+  const next = clamp(Math.round(level), 0, state.qualityProfiles.length - 1);
+  const changed = next !== state.qualityLevel;
+  state.qualityLevel = next;
+
+  const profile = getQualityProfile(next);
+  state.renderScale = profile.renderScale;
+
+  if (state.analysisHz !== profile.analysisHz) {
+    state.analysisHz = profile.analysisHz;
+    if (state.running && state.analyser) startAnalysisLoop();
+  }
+
+  if (state.particles.length > profile.maxParticles) {
+    state.particles.splice(0, state.particles.length - profile.maxParticles);
+  }
+  if (state.pulseWaves.length > profile.pulseWaveMax) {
+    state.pulseWaves.splice(0, state.pulseWaves.length - profile.pulseWaveMax);
+  }
+  if (state.shatterCols !== profile.shatterCols || state.shatterRows !== profile.shatterRows) {
+    state.shatterCols = profile.shatterCols;
+    state.shatterRows = profile.shatterRows;
+    state.shatterMesh = [];
+  }
+
+  if (changed || forceResize) resize();
+}
+
+function resetPerformanceGovernor(nowMs = performance.now(), keepQuality = true) {
+  state.governorPaused = false;
+  state.fpsEma = 60;
+  state.refreshEmaMs = 1000 / 60;
+  state.lastPerfEvalAt = nowMs;
+  state.qualityLockUntilMs = nowMs;
+  state.governorWarmupUntilMs = nowMs + state.governorWarmupMs;
+  if (!keepQuality) applyQuality(1, true);
+}
+
+function updatePerformanceGovernor(frameDtMs, nowMs) {
+  if (state.governorPaused) return;
+  if (frameDtMs > 250) return;
+
+  state.refreshEmaMs += (frameDtMs - state.refreshEmaMs) * 0.08;
+  const refreshHz = clamp(1000 / Math.max(4, state.refreshEmaMs), state.minRefreshHz, state.maxRefreshHz);
+
+  const fps = 1000 / Math.max(0.001, frameDtMs);
+  state.fpsEma += (fps - state.fpsEma) * 0.06;
+
+  if (!state.qualityAuto) return;
+
+  if (nowMs < state.governorWarmupUntilMs) return;
+  if ((nowMs - state.lastPerfEvalAt) < 1000) return;
+  state.lastPerfEvalAt = nowMs;
+
+  const lowThreshold = refreshHz * 0.50;
+  const medThreshold = refreshHz * 0.75;
+  const upThreshold = refreshHz * 0.92;
+
+  let nextQuality = state.qualityLevel;
+  if (state.fpsEma < lowThreshold) nextQuality = 0;
+  else if (state.fpsEma < medThreshold) nextQuality = Math.min(nextQuality, 1);
+  else if (state.fpsEma > upThreshold) nextQuality = Math.min(2, nextQuality + 1);
+
+  if (nextQuality !== state.qualityLevel) {
+    const isUpgrade = nextQuality > state.qualityLevel;
+    if (isUpgrade) {
+      if (nowMs >= state.qualityLockUntilMs) {
+        applyQuality(nextQuality);
+        state.qualityLockUntilMs = nowMs + state.upgradeLockMs;
+      }
+    } else {
+      applyQuality(nextQuality);
+    }
+  }
 }
 
 function getMeanStd(arr, meanHint = null) {
@@ -772,14 +974,17 @@ function updateMusicState(now, detectorState = null) {
     if (wanted === 'DROP') {
       state.dropImpactFrames = 8;
       state.impactPulse = Math.max(state.impactPulse, 1.6);
-      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && canTriggerFlashEvent(now)) {
-        state.flashOpacity = Math.max(state.flashOpacity, 1.8);
+      const transitionHot = getFlashHotScore();
+      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && transitionHot > 0.55 && canTriggerFlashEvent(now)) {
+        state.flashOpacity = Math.max(state.flashOpacity, 1.25 + transitionHot * 1.35);
         state.floodFrames = 3;
         state.floodHue = getPaletteHue(24 + Math.random() * 36);
         SafetyLimiter.recordFlash(now);
       }
-      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02)) triggerStrobePulse(1.2, now);
-      spawnBurst(48);
+      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && transitionHot > 0.50) {
+        triggerStrobePulse(1.0 + transitionHot * 0.4, now);
+      }
+      spawnBurst(24 + Math.floor(36 * transitionHot));
     }
   }
 
@@ -839,7 +1044,17 @@ function applyPreset(index) {
   state.highK = p.highK;
   state.beatCooldownMs = p.beatCooldownMs;
   state.bpmConfidenceMin = p.bpmConfidenceMin;
+  state.baseMaxStrobeHz = p.maxStrobeHz;
   state.maxStrobeHz = p.maxStrobeHz;
+  state.tuneSensitivity = p.tuneSensitivity;
+  state.tuneFlashRate = p.tuneFlashRate;
+  state.tuneSafety = p.tuneSafety;
+  state.qualityAuto = p.qualityAuto;
+  applyQuality(p.qualityLevel, true);
+  resetPerformanceGovernor(performance.now(), true);
+  refreshPresetButton();
+  refreshQualityButton();
+  updateTuneUi();
 }
 
 function applyPresetToRunningAnalyser() {
@@ -876,8 +1091,26 @@ function triggerStrobePulse(intensity, now = performance.now()) {
   SafetyLimiter.recordFlash(now);
 }
 
+function getFlashHotScore() {
+  const sens = state.tuneSensitivity;
+  const energyN = clamp(((state.energySmooth * sens) - 0.08) / 0.62, 0, 1);
+  const subN = clamp(((state.subBass * sens) - 0.10) / 0.75, 0, 1);
+  const intensityN = clamp((state.intensity - 0.65) / 2.25, 0, 1);
+  const bpmConfN = clamp((state.bpmConfidence - 0.15) / 0.85, 0, 1);
+  return clamp(energyN * 0.38 + subN * 0.34 + intensityN * 0.18 + bpmConfN * 0.10, 0, 1);
+}
+
+function getFlashBudget() {
+  const hot = getFlashHotScore();
+  const subBoost = state.subBass > 0.62 ? 1 : 0;
+  const tempoBoost = state.bpmConfidence > 0.45 ? 1 : 0;
+  const bySignal = Math.round(1 + hot * 8) + subBoost + tempoBoost; // 1..11
+  const hardCap = Math.max(2, Math.floor((state.maxStrobeHz || 10) * state.tuneFlashRate));
+  return clamp(bySignal, 1, hardCap);
+}
+
 function canTriggerFlashEvent(now = performance.now()) {
-  const budget = state.flashBudget[state.musicState] ?? 0;
+  const budget = getFlashBudget();
   return SafetyLimiter.getRate(now) < budget;
 }
 
@@ -912,7 +1145,9 @@ const SafetyLimiter = {
     const burstMin = now - 700;
     while (this.burstTimes.length && this.burstTimes[0] < burstMin) this.burstTimes.shift();
 
-    const sustainedLimit = Math.max(3, Math.floor(state.maxStrobeHz || 3));
+    const safety = clamp(state.tuneSafety, 0.6, 1.4);
+    const safetyMul = 1.55 - safety; // safety=1.4 => stricter, safety=0.6 => looser
+    const sustainedLimit = Math.max(2, Math.floor((state.maxStrobeHz || 3) * state.tuneFlashRate * safetyMul));
     const hardGuardLimit = Math.max(14, sustainedLimit + 7);
     const burstLimit = Math.max(7, Math.floor(sustainedLimit * 2.1));
 
@@ -1025,6 +1260,7 @@ const MainController = {
       `beatETA: ${(state.nextBeatAt - nowSec).toFixed(3)}s  beatPhaseConf: ${state.beatPhaseConfidence.toFixed(2)}`,
       `RMS: ${BeatEngine.metrics.rms.toFixed(3)}`,
       `BPM: ${Math.round(state.bpmSmooth) || '--'}  conf=${Math.round(state.bpmConfidence*100)}%`,
+      `fps: ${state.fpsEma.toFixed(1)}  hz: ${(1000/Math.max(4,state.refreshEmaMs)).toFixed(0)}  quality: ${state.qualityAuto ? 'AUTO' : state.qualityNames[state.qualityLevel]}  scale: ${state.renderScale.toFixed(2)}`,
       `brightness: ${state.visualBrightness.toFixed(2)}  motion: ${state.visualMotion.toFixed(2)}`,
       `flash/s: ${flashRate}`,
       `intensity: ${state.intensity.toFixed(2)}`,
@@ -1038,12 +1274,25 @@ const MainController = {
 };
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const scale = clamp(state.renderScale || 1, 0.5, 1);
+  canvas.width = Math.max(320, Math.floor(window.innerWidth * scale));
+  canvas.height = Math.max(180, Math.floor(window.innerHeight * scale));
   initShatterMesh();
 }
-resize();
+applyQuality(state.qualityLevel, true);
+resetPerformanceGovernor(performance.now(), true);
+refreshQualityButton();
+refreshPresetButton();
+updateTuneUi();
+setTunePanelVisible(false);
 window.addEventListener('resize', resize);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    state.governorPaused = true;
+    return;
+  }
+  resetPerformanceGovernor(performance.now(), true);
+});
 
 function startAnalysisLoop() {
   stopAnalysisLoop();
@@ -1061,6 +1310,30 @@ function stopAnalysisLoop() {
     clearInterval(state.analysisTimer);
     state.analysisTimer = null;
   }
+}
+
+async function getSystemCaptureStream() {
+  const attempts = [
+    { audio: true, video: true, selfBrowserSurface: 'exclude', surfaceSwitching: 'include', systemAudio: 'include' },
+    { audio: true, video: true, surfaceSwitching: 'include', systemAudio: 'include' },
+    { audio: true, video: true },
+  ];
+  let lastError = null;
+  for (const constraints of attempts) {
+    try {
+      return await navigator.mediaDevices.getDisplayMedia(constraints);
+    } catch (e) {
+      lastError = e;
+      const unsupported = e && (
+        e.name === 'TypeError' ||
+        e.name === 'OverconstrainedError' ||
+        e.name === 'NotSupportedError'
+      );
+      if (unsupported) continue;
+      throw e;
+    }
+  }
+  throw lastError || new Error('DISPLAY_MEDIA_FAILED');
 }
 
 // ═══════════════════════════════════════════
@@ -1097,9 +1370,18 @@ async function startAudio() {
     }
 
     if (state.sourceMode === 1 || state.sourceMode === 2) {
-      const sysStream = await navigator.mediaDevices.getDisplayMedia({
-        audio: true,
-        video: true,
+      const sysStream = await getSystemCaptureStream();
+      const sysAudioTracks = sysStream.getAudioTracks();
+      if (!sysAudioTracks.length) {
+        sysStream.getTracks().forEach((t) => t.stop());
+        throw new Error('SYSTEM_AUDIO_MISSING');
+      }
+      const sysAudioTrack = sysAudioTracks[0];
+      sysAudioTrack.addEventListener('ended', () => {
+        if (!state.running) return;
+        stopAudio().then(() => {
+          el.status.textContent = '✗ SYSTEM AUDIO ENDED';
+        }).catch(() => {});
       });
       state.mediaStreams.push(sysStream);
       const sysSource = state.audioCtx.createMediaStreamSource(sysStream);
@@ -1129,9 +1411,23 @@ async function startAudio() {
     el.btnStart.textContent = '■ STOP';
     el.btnStart.classList.add('active');
   } catch(e) {
+    await stopAudio();
     state.running = false;
-    el.status.textContent = '✗ AUDIO DENIED';
-    alert('Přístup k audio zdroji byl zamítnut. Povol mikrofon/sdílení zvuku v prohlížeči.');
+
+    if (e && e.message === 'SYSTEM_AUDIO_MISSING') {
+      el.status.textContent = '✗ NO SYSTEM AUDIO';
+      alert('Systémový zvuk nebyl sdílen. Zkus znovu SOURCE: SYSTEM/MIX a při sdílení zapni "Share audio".');
+      return;
+    }
+
+    if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) {
+      el.status.textContent = '✗ AUDIO DENIED';
+      alert('Přístup k audio zdroji byl zamítnut. Povol mikrofon/sdílení zvuku v prohlížeči.');
+      return;
+    }
+
+    el.status.textContent = '✗ AUDIO ERROR';
+    alert('Nepodařilo se spustit audio vstup. Zkontroluj oprávnění a zkus to znovu.');
   }
 }
 
@@ -1377,7 +1673,7 @@ function analyzeAudio() {
 
   // ── Micro flashes on high transients ──────────────────────────────────────
   const highTransient = highFluxNorm > (highFluxStats.mean + (state.highK * 0.82) * highFluxStats.std);
-  const microFlashAllowed = state.musicState === 'DROP' || state.musicState === 'BUILD';
+  const microFlashAllowed = getFlashHotScore() > 0.46;
   const beatWindowOk = Math.abs(nowSec - state.nextBeatAt) <= 0.05;
   if (state.strobeEnabled && microFlashAllowed && beatWindowOk && highTransient && (now - state.lastMicroFlashAt) > 180 && canTriggerFlashEvent(now)) {
     const p = 0.48 + clamp(highFluxNorm * 4.8, 0, 0.48);
@@ -1543,11 +1839,19 @@ function onBeat() {
   const now = performance.now();
   const beatFlashConfidence = 0.3 + state.bpmConfidence * 0.7;
   const beatPhaseOk = state.beatPhaseTriggerNow;
-  const beatFlashAllowed = state.strobeEnabled && beatPhaseOk && state.bpmConfidence >= 0.2 && canTriggerFlashEvent(now);
+  const hotScore = getFlashHotScore();
+  const hotSignal = hotScore > 0.50;
+  const hotBeatFlashAllowed = state.strobeEnabled
+    && beatPhaseOk
+    && state.bpmConfidence >= 0.18
+    && hotSignal
+    && SafetyLimiter.allowFlash(now, true);
+  const beatFlashAllowed = hotBeatFlashAllowed
+    || (state.strobeEnabled && beatPhaseOk && state.bpmConfidence >= 0.2 && canTriggerFlashEvent(now));
   state.beatPulse = 1.0;
   state.flashColorPhase = !state.flashColorPhase;
-  const dropBoost = state.musicState === 'DROP' ? 1.45 : 1;
-  const i = state.intensity * state.sectionIntensityMul * dropBoost;
+  const signalBoost = 1 + clamp((hotScore - 0.45) * 1.6, 0, 0.6);
+  const i = state.intensity * state.sectionIntensityMul * signalBoost;
   // Flash
   if (beatFlashAllowed) {
     state.flashOpacity = Math.min(2.8, (0.9 + state.subBass * 1.8 * i) * rage * (0.75 + live * 1.05) * beatFlashConfidence);
@@ -1555,7 +1859,7 @@ function onBeat() {
   } else {
     state.flashOpacity = Math.min(state.flashOpacity, 0.04);
   }
-  if (state.musicState === 'DROP' && (state.subBass > 0.7 || state.energy > 0.65) && beatFlashAllowed) {
+  if ((hotScore > 0.62) && (state.subBass > 0.7 || state.energy > 0.65) && beatFlashAllowed) {
     state.overdriveWhite = Math.min(1.6, 0.5 + state.subBass * 1.05 * i + state.energyAccumulator * 0.6);
   }
 
@@ -1580,12 +1884,12 @@ function onBeat() {
   );
 
   if (state.mode === 5 || (state.mode === 7 && state.allCurrentMode === 5)) {
-    const idle = state.musicState === 'IDLE' || state.musicState === 'BREAKDOWN';
-    const drop = state.musicState === 'DROP';
-    const count = idle ? 1 : drop ? 4 : 2;
+    const quiet = hotScore < 0.35;
+    const intense = hotScore > 0.68;
+    const count = quiet ? 1 : intense ? 4 : 2;
     for (let n=0; n<count; n++) {
-      const band = drop ? n % 3 : (state.subBassSmooth > state.highSmooth ? 0 : 1 + (n % 2));
-      spawnPulseWave(band, drop ? (1 + Math.random() * 0.65) : (0.9 + Math.random() * 0.35));
+      const band = intense ? (n % 3) : (state.subBassSmooth > state.highSmooth ? 0 : 1 + (n % 2));
+      spawnPulseWave(band, intense ? (1 + Math.random() * 0.65) : (0.9 + Math.random() * 0.35));
     }
   }
 
@@ -1593,10 +1897,10 @@ function onBeat() {
     state.shatterBeatImpulse,
     (0.42 + state.subBassSmooth * 0.8) * (0.35 + state.sectionIntensityMul * 0.6)
   );
-  if (state.musicState === 'DROP') {
+  if (hotScore > 0.64 && state.subBassSmooth > 0.45) {
     state.shatterDropImpulse = Math.max(
       state.shatterDropImpulse,
-      0.85 + state.subBassSmooth * 0.85 + state.energySmooth * 0.4
+      0.72 + hotScore * 0.45 + state.subBassSmooth * 0.7 + state.energySmooth * 0.35
     );
   }
 }
@@ -1709,6 +2013,7 @@ function getPulseBandColor(band, alpha = 1, strength = 0.5) {
 }
 
 function spawnPulseWave(band = 0, multiplier = 1) {
+  const profile = getQualityProfile();
   const sectionMul = state.sectionIntensityMul;
   const chill = state.musicState === 'CHILL';
   const baseSpeed = chill ? 1.4 : 2.4;
@@ -1725,8 +2030,8 @@ function spawnPulseWave(band = 0, multiplier = 1) {
     seed: Math.random() * Math.PI * 2,
   });
 
-  if (state.pulseWaves.length > 64) {
-    state.pulseWaves.splice(0, state.pulseWaves.length - 64);
+  if (state.pulseWaves.length > profile.pulseWaveMax) {
+    state.pulseWaves.splice(0, state.pulseWaves.length - profile.pulseWaveMax);
   }
 }
 
@@ -1793,8 +2098,10 @@ function initShatterMesh() {
 //  PARTICLES
 // ═══════════════════════════════════════════
 function spawnBurst(n) {
+  const profile = getQualityProfile();
+  const spawnCount = Math.max(1, Math.round(n * profile.burstMul));
   const cx = canvas.width/2, cy = canvas.height/2;
-  for (let i=0; i<n; i++) {
+  for (let i=0; i<spawnCount; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 2 + Math.random() * 8 * (1+state.bass*3);
     state.particles.push({
@@ -1809,10 +2116,14 @@ function spawnBurst(n) {
       trail: [],
     });
   }
-  if (state.particles.length > 600) state.particles.splice(0, state.particles.length-600);
+  if (state.particles.length > profile.maxParticles) {
+    state.particles.splice(0, state.particles.length - profile.maxParticles);
+  }
 }
 
 function spawnAmbient() {
+  const profile = getQualityProfile();
+  if (state.particles.length >= profile.maxParticles) return;
   const drive = getVisualDrive();
   if (state.energySmooth < 0.05 && drive < 0.08) return;
   if (Math.random() > clamp(state.energySmooth * 0.25 + drive * 0.85, 0, 1)) return;
@@ -1838,12 +2149,14 @@ function spawnAmbient() {
 }
 
 function updateParticles() {
+  const profile = getQualityProfile();
+  const trailLimit = profile.trailLength;
   const motion = state.motionScale;
   const drive = getVisualDrive();
   for (let i=state.particles.length-1; i>=0; i--) {
     const p = state.particles[i];
     p.trail.push({x:p.x, y:p.y});
-    if (p.trail.length > 8) p.trail.shift();
+    if (p.trail.length > trailLimit) p.trail.shift();
     p.x += p.vx * (1 + state.energySmooth * 0.45 + drive * 0.9) * motion;
     p.y += p.vy * (1 + state.energySmooth * 0.45 + drive * 0.9) * motion;
     p.vx *= 0.985;
@@ -2035,6 +2348,7 @@ function drawModeTunnel(clear=true) {
 
 // MODE 3: GRID
 function drawModeGrid(clear=true) {
+  const profile = getQualityProfile();
   const fade = getBeatReactiveFade();
   const drive = getVisualDrive();
   const phaseTime = state.time + state.beatPhase;
@@ -2046,7 +2360,7 @@ function drawModeGrid(clear=true) {
   ctx.save();
   ctx.globalAlpha = getSectionDrawAlpha();
 
-  const cols=24, rows=14;
+  const cols = profile.gridCols, rows = profile.gridRows;
   const cw=canvas.width/cols, ch=canvas.height/rows;
 
   for (let r=0; r<rows; r++) {
@@ -2076,6 +2390,7 @@ function drawModeGrid(clear=true) {
 
 // MODE 4: CHAOS
 function drawModeChaos(clear=true) {
+  const profile = getQualityProfile();
   const fade = getBeatReactiveFade();
   const drive = getVisualDrive();
   const phaseTime = state.time + state.beatPhase;
@@ -2093,8 +2408,9 @@ function drawModeChaos(clear=true) {
   // Lissajous-like freq drawing
   if (state.analyser) {
     const freqData = state.dataArray;
+    const step = profile.chaosStep;
     ctx.beginPath();
-    for (let i=0; i<state.bufferLen; i+=2) {
+    for (let i=0; i<state.bufferLen; i+=step) {
       const t = (i/state.bufferLen)*Math.PI*2;
       const r = 100 + (freqData[i]/255)*300*(1+drive*1.5);
       const twist = phaseTime*1.5 + state.midSmooth*3 + drive * 1.8;
@@ -2113,7 +2429,7 @@ function drawModeChaos(clear=true) {
 
   // Edge streaks on beat
   if (state.beatDetected) {
-    for (let i=0; i<8; i++) {
+    for (let i=0; i<profile.chaosStreaks; i++) {
       const angle = Math.random()*Math.PI*2;
       const len = 100+Math.random()*300;
       ctx.beginPath();
@@ -2129,6 +2445,7 @@ function drawModeChaos(clear=true) {
 
 // MODE 5: VORTEX
 function drawModeVortex(clear=true) {
+  const profile = getQualityProfile();
   const drive = getVisualDrive();
   const phaseTime = state.time + state.beatPhase;
   const fade = getBeatReactiveFade(0.62);
@@ -2143,7 +2460,7 @@ function drawModeVortex(clear=true) {
   const cx = canvas.width * 0.5;
   const cy = canvas.height * 0.5;
   const maxR = Math.min(canvas.width, canvas.height) * 0.56;
-  const lines = Math.floor(180 + state.sectionIntensityMul * 120);
+  const lines = Math.floor(profile.vortexLinesBase + state.sectionIntensityMul * profile.vortexLinesBoost);
   const beatTwist = state.vortexBeatTwist;
   const baseSpin = phaseTime * (0.25 + state.visualMotion * 0.32 + state.midSmooth * 0.7 + drive * 0.3);
 
@@ -2194,6 +2511,7 @@ function drawModeVortex(clear=true) {
 
 // MODE 6: PULSE
 function drawModePulse(clear=true) {
+  const profile = getQualityProfile();
   const drive = getVisualDrive();
   const phaseTime = state.time + state.beatPhase;
   const fade = getBeatReactiveFade(0.7);
@@ -2213,7 +2531,7 @@ function drawModePulse(clear=true) {
     if (state.pulseWaves.length === 0 || (Math.random() < 0.01 && state.pulseWaves.length < 2)) {
       spawnPulseWave(1, 0.72);
     }
-  } else if (Math.random() < (0.01 + state.energySmooth * 0.015 + drive * 0.06) && state.pulseWaves.length < 10) {
+  } else if (Math.random() < (0.01 + state.energySmooth * 0.015 + drive * 0.06) && state.pulseWaves.length < Math.min(10, profile.pulseWaveMax)) {
     spawnPulseWave(Math.floor(Math.random() * 3), 0.8 + Math.random() * 0.4);
   }
 
@@ -2234,7 +2552,7 @@ function drawModePulse(clear=true) {
     const ripple = phaseTime * (1.6 + energy * 2.6 + drive * 0.8);
 
     ctx.beginPath();
-    const segs = 84;
+    const segs = profile.pulseSegs;
     for (let s = 0; s <= segs; s++) {
       const a = (s / segs) * Math.PI * 2;
       const specShift = 0.006 + ((Math.sin(a * 3 + w.seed) + 1) * 0.5) * 0.02;
@@ -2371,6 +2689,8 @@ function drawModeAll() {
 //  EFFECTS
 // ═══════════════════════════════════════════
 function drawEffects() {
+  const profile = getQualityProfile();
+  const effectsLevel = profile.effectsLevel;
   const live = 1 - state.idleBlend;
   const now = performance.now();
   const sectionMul = state.sectionIntensityMul;
@@ -2486,64 +2806,61 @@ function drawEffects() {
     el.strobe.style.opacity = 0;
   }
 
-  // Micro flashes from highs
-  if (state.strobeEnabled && state.microFlashOpacity > 0) {
+  const useScreenOverlays = state.strobeEnabled && (
+    (effectsLevel > 0 && (state.microFlashOpacity > 0 || state.impactPulse > 0 || state.overdriveWhite > 0))
+    || state.floodFrames > 0
+  );
+  if (useScreenOverlays) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-    ctx.fillStyle = getAlternatingFlashTint(Math.min(1, state.microFlashOpacity * 0.56 * brightness), 10, 74);
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (effectsLevel > 0 && state.microFlashOpacity > 0) {
+      ctx.fillStyle = getAlternatingFlashTint(Math.min(1, state.microFlashOpacity * 0.56 * brightness), 10, 74);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      state.microFlashOpacity *= 0.45;
+    }
+
+    if (effectsLevel > 0 && state.impactPulse > 0) {
+      const glow = Math.min(1, state.impactPulse);
+      const grad = ctx.createRadialGradient(
+        canvas.width * 0.5,
+        canvas.height * 0.5,
+        0,
+        canvas.width * 0.5,
+        canvas.height * 0.5,
+        Math.max(canvas.width, canvas.height) * 0.75
+      );
+      grad.addColorStop(0, getAlternatingFlashTint(0.14 * glow * brightness, 0, 78));
+      grad.addColorStop(0.35, getAlternatingFlashTint(0.06 * glow * brightness, 18, 68));
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      state.impactPulse *= 0.84;
+    }
+
+    if (effectsLevel > 0 && state.overdriveWhite > 0) {
+      ctx.fillStyle = getAlternatingFlashTint(Math.min(1, state.overdriveWhite * (0.34 + state.intensity * sectionMul * 0.24) * brightness), 6, 84);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      state.overdriveWhite *= 0.58;
+    }
+
+    if (state.floodFrames > 0) {
+      ctx.fillStyle = state.floodHue === null
+        ? `rgba(255,255,255,${0.34 + state.intensity * sectionMul * 0.14 * brightness})`
+        : `hsla(${state.floodHue},100%,58%,${0.34 + state.intensity * sectionMul * 0.14 * brightness})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      state.floodFrames -= 1;
+    }
     ctx.restore();
-    state.microFlashOpacity *= 0.45;
   }
 
-  // Global beat pulse: short additive glow over whole scene
-  if (state.strobeEnabled && state.impactPulse > 0) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    const glow = Math.min(1, state.impactPulse);
-    const grad = ctx.createRadialGradient(
-      canvas.width * 0.5,
-      canvas.height * 0.5,
-      0,
-      canvas.width * 0.5,
-      canvas.height * 0.5,
-      Math.max(canvas.width, canvas.height) * 0.75
-    );
-    grad.addColorStop(0, getAlternatingFlashTint(0.14 * glow * brightness, 0, 78));
-    grad.addColorStop(0.35, getAlternatingFlashTint(0.06 * glow * brightness, 18, 68));
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    state.impactPulse *= 0.84;
+  // Grid warp with bass (throttled on lower quality to reduce style/layout churn)
+  if ((now - state.lastGridWarpAt) >= profile.gridWarpMs) {
+    el.grid.style.opacity = (0.25 + state.midSmooth * 0.55 + state.impactPulse * 0.2) * (0.55 + live * 0.6);
+    const gshift = state.bassSmooth * 14 + state.impactPulse * 10;
+    el.grid.style.backgroundSize = `${60 + gshift}px ${60 + gshift}px`;
+    state.lastGridWarpAt = now;
   }
-
-  // Strong-beat overdrive: can push whole frame to white
-  if (state.strobeEnabled && state.overdriveWhite > 0) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    ctx.fillStyle = getAlternatingFlashTint(Math.min(1, state.overdriveWhite * (0.34 + state.intensity * sectionMul * 0.24) * brightness), 6, 84);
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    state.overdriveWhite *= 0.58;
-  }
-
-  // Full-screen color flood for extreme bass (~2 frames)
-  if (state.strobeEnabled && state.floodFrames > 0) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    ctx.fillStyle = state.floodHue === null
-      ? `rgba(255,255,255,${0.34 + state.intensity * sectionMul * 0.14 * brightness})`
-      : `hsla(${state.floodHue},100%,58%,${0.34 + state.intensity * sectionMul * 0.14 * brightness})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    state.floodFrames -= 1;
-  }
-
-  // Grid warp with bass
-  el.grid.style.opacity = (0.25 + state.midSmooth*0.55 + state.impactPulse*0.2) * (0.55 + live*0.6);
-  const gshift = state.bassSmooth * 14 + state.impactPulse * 10;
-  el.grid.style.backgroundSize = `${60+gshift}px ${60+gshift}px`;
 
   if (brightness < 0.995) {
     ctx.save();
@@ -2575,6 +2892,7 @@ function updateMeters() {
   el.energyState.textContent = state.musicState;
 
   // BPM in status
+  if (performance.now() < state.statusOverrideUntilMs) return;
   const pName = state.presets[state.presetIndex].name;
   if (hasRecentBpm) {
     el.status.textContent = `● LIVE  ${Math.round(state.bpmSmooth)} BPM  C${Math.round(state.bpmConfidence*100)}%  ${state.musicState}  ${pName}`;
@@ -2589,9 +2907,11 @@ function updateMeters() {
 let lastFrameTime = performance.now();
 function loop(now = performance.now()) {
   requestAnimationFrame(loop);
-  const dtMs = Math.min(50, Math.max(0.001, now - lastFrameTime));
+  const rawDtMs = Math.max(0.001, now - lastFrameTime);
+  const dtMs = Math.min(50, rawDtMs);
   lastFrameTime = now;
   state.frameDtMs = dtMs;
+  updatePerformanceGovernor(rawDtMs, now);
   state.time += dtMs / 1000;
   state.beatPulse *= state.beatPulseDecay;
   if (state.beatPulse < 0.001) state.beatPulse = 0;
@@ -2674,6 +2994,45 @@ el.btnColor.addEventListener('click', () => {
   el.btnColor.textContent = `COLOR: ${state.colorNames[state.colorMode]}`;
 });
 
+el.btnPreset.addEventListener('click', () => {
+  applyPreset((state.presetIndex + 1) % state.presets.length);
+  applyPresetToRunningAnalyser();
+});
+
+el.btnQuality.addEventListener('click', () => {
+  if (state.qualityAuto) {
+    state.qualityAuto = false;
+    applyQuality(2, true);
+  } else if (state.qualityLevel === 2) {
+    applyQuality(1, true);
+  } else if (state.qualityLevel === 1) {
+    applyQuality(0, true);
+  } else {
+    state.qualityAuto = true;
+    resetPerformanceGovernor(performance.now(), true);
+  }
+  refreshQualityButton();
+});
+
+el.btnTune.addEventListener('click', () => {
+  setTunePanelVisible(!state.tunePanelVisible);
+});
+
+el.tuneSens.addEventListener('input', () => {
+  state.tuneSensitivity = parseFloat(el.tuneSens.value);
+  updateTuneUi();
+});
+
+el.tuneRate.addEventListener('input', () => {
+  state.tuneFlashRate = parseFloat(el.tuneRate.value);
+  updateTuneUi();
+});
+
+el.tuneSafe.addEventListener('input', () => {
+  state.tuneSafety = parseFloat(el.tuneSafe.value);
+  updateTuneUi();
+});
+
 el.btnStrobe.addEventListener('click', () => {
   state.strobeMode = 2;
   state.beatDivIndex = 2;
@@ -2686,9 +3045,11 @@ el.btnStrobe.addEventListener('click', () => {
 
 el.btnFs.addEventListener('click', () => {
   if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(()=>{});
+    document.documentElement.requestFullscreen().catch(() => {
+      setStatusOverride('✗ FULLSCREEN DENIED');
+    });
   } else {
-    document.exitFullscreen();
+    document.exitFullscreen().catch(() => {});
   }
 });
 
@@ -2728,9 +3089,23 @@ document.addEventListener('keydown', (e) => {
     case 'g': case 'G':
       MainController.toggleDebug();
       break;
+    case 'q': case 'Q':
+      el.btnQuality.click();
+      break;
+    case 'p': case 'P':
+      el.btnPreset.click();
+      break;
+    case 't': case 'T':
+      el.btnTune.click();
+      break;
     case 'f': case 'F':
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-      else document.exitFullscreen();
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          setStatusOverride('✗ FULLSCREEN DENIED');
+        });
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
       break;
   }
 });
