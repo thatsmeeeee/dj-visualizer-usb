@@ -63,6 +63,8 @@ If it doesn't open, manually visit:
 
 So you need **Python 3** or **Node.js** installed.
 
+The launcher prefers **Chrome**. If not found, it falls back to your default browser.
+
 ## Using audio (MIC / SYSTEM / MIX)
 
 In the UI, you can switch the audio source:
@@ -92,7 +94,7 @@ Hotkeys:
 - `C` — Color mode
 - `S` — Strobe toggle
 - `F` — Fullscreen
-- `G` — Debug overlay
+- `G` — Debug overlay (FPS, audio levels)
 
 ## Safety warning (strobe / flashes)
 
@@ -112,5 +114,14 @@ Grant permission for microphone / screen-share audio in your browser, then try a
 Try a different browser (Chrome is the most consistent for screen/tab audio capture).
 When sharing, ensure **audio sharing is enabled**.
 
+## Language
+
+The launcher scripts display messages in **Czech**. You can translate them by editing `start.bat` or `start.command`.
+
+## Browser access
+
+The server is **localhost-only** and not exposed to the network (safe for USB gigs).
+
 ## License
-If you want this to be publicly reusable, add a LICENSE file (MIT is common).
+
+MIT License — use, modify, and share freely. See [LICENSE](LICENSE).
