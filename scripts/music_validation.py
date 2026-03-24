@@ -146,27 +146,37 @@ def process_track(path: Path, max_seconds: float = 90.0, debug: bool = False) ->
         flash = np.zeros(len(beat_score), dtype=bool)
         beat_times = librosa.frames_to_time(beat_frames, sr=sr, hop_length=hop)
         flashed_recent: list[float] = []
+        rhythmic_mode = (105 <= tempo <= 180) and (bpm_conf >= 0.28)
         for i in range(len(beat_score)):
             down = beat_in_bar[i] == 1
-            weak_gate = (hot[i] > 0.32) or (down and downbeat_conf > 0.35)
-            hot_gate = hot[i] > 0.46
+            transient = clamp(b_flux[i] * 0.8 + b_sub[i] * 0.4, 0, 1.4)
+            reactive_gain = clamp(0.72 + hot[i] * 1.55 + transient * 0.55, 0.72, 2.4)
+            if rhythmic_mode:
+                reactive_gain = max(reactive_gain, 1.6)
+
+            lock_energy_floor = b_energy[i] > 0.11
+            weak_gate = (rhythmic_mode and lock_energy_floor) or (hot[i] > 0.24) or (down and downbeat_conf > 0.30)
+            hot_gate = (hot[i] > 0.16) if rhythmic_mode else (hot[i] > 0.36)
             if not weak_gate:
                 continue
             t = float(beat_times[i])
             flashed_recent = [x for x in flashed_recent if (t - x) <= 1.0]
-            by_signal = round(1 + hot[i] * 8)
-            by_signal += 1 if b_sub[i] > 0.62 else 0
+            by_signal = round((2 + hot[i] * 10) * reactive_gain)
+            by_signal += 1 if b_sub[i] > 0.56 else 0
             by_signal += 1 if bpm_conf > 0.45 else 0
             by_signal += 1 if down else 0
             by_signal += 1 if phrase_boundary[i] else 0
-            if (not down) and hot[i] < 0.55 and b_tension[i] < 0.35:
+            if rhythmic_mode:
+                by_signal += 1
+            elif (not down) and hot[i] < 0.48 and b_tension[i] < 0.30:
                 by_signal -= 1
-            budget = int(clamp(by_signal, 1, 10))
+            hard_cap = 18 if rhythmic_mode else 14
+            budget = int(clamp(by_signal, 1, hard_cap))
             if len(flashed_recent) >= budget:
                 continue
-            dynamic_thresh = 0.44 - (0.10 if hot[i] > 0.68 else 0.0)
+            dynamic_thresh = 0.30 - (0.08 if hot[i] > 0.60 else 0.0) - (0.05 if rhythmic_mode else 0.0)
             pulse = beat_score[i] * (1.12 if hot[i] > 0.68 else 1.0)
-            allow = hot_gate or (pulse >= dynamic_thresh)
+            allow = hot_gate or (pulse >= dynamic_thresh) or (rhythmic_mode and pulse > 0.16)
             if allow:
                 flash[i] = True
                 flashed_recent.append(t)

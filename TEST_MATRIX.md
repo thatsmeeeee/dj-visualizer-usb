@@ -2,18 +2,30 @@
 
 ## Automated (run in terminal)
 
+0. Full regression helper
+   - Command: `python3 scripts/selftest.py`
+   - Expected: all checks `PASS`
+   - Includes: occupied-port fallback and all-ports-busy failure path for smoke autostart.
+
+0b. Track behavior suite (offline audio logic)
+   - Command: `python3 scripts/track_suite.py /path/to/tracks --json-out output/track-suite.json`
+   - Expected: summary + PASS/FAIL verdict + worst-track list
+
 1. Smoke test without running server
    - Command: `python3 smoke_test.py --retries 1 --delay 0.1`
    - Expected: `FAIL no reachable server URL`
-2. Smoke test with local server
+2. Smoke test with autostart
+   - Command: `python3 smoke_test.py --autostart`
+   - Expected: `OK ...` + `INFO smoke test used temporary server`
+3. Smoke test with local server
    - Command:
      - `python3 -m http.server 8080 --bind 127.0.0.1`
      - `python3 smoke_test.py`
    - Expected: `OK http://127.0.0.1:8080/dj-visualizer.html (200)`
-3. Delayed-start smoke test (retry behavior)
+4. Delayed-start smoke test (retry behavior)
    - Command: start server after delay and run `smoke_test.py --retries 12 --delay 0.3`
    - Expected: `OK ...` after retries
-4. Port fallback in mac launcher
+5. Port fallback in mac launcher
    - Occupy `8080`, run `start.command`
    - Expected: launcher uses `8081`
    - Occupy `8080` + `8081`

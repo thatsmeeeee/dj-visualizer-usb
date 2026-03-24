@@ -43,7 +43,7 @@ start_with_cmd() {
     if port_busy "$p"; then
       continue
     fi
-    URL="http://localhost:${p}/dj-visualizer.html"
+    URL="http://127.0.0.1:${p}/dj-visualizer.html"
     nohup bash -lc "${cmd/__PORT__/$p}" >"${LOG_FILE}" 2>&1 &
     SERVER_PID=$!
 

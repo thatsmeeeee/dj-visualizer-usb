@@ -30,7 +30,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 "$server = $null;" ^
 "foreach($p in $ports){" ^
 "  if(Test-PortBusy $p){ continue }" ^
-"  $testUrl = 'http://localhost:' + $p + '/dj-visualizer.html';" ^
+"  $testUrl = 'http://127.0.0.1:' + $p + '/dj-visualizer.html';" ^
 "  $candidate = Start-Server $serverTemplate $p $wd;" ^
 "  Start-Sleep -Milliseconds 250;" ^
 "  if($candidate.HasExited){ continue }" ^
@@ -38,7 +38,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 "  if(-not $candidate.HasExited){ Stop-Process -Id $candidate.Id -Force -ErrorAction SilentlyContinue }" ^
 "}" ^
 "if(-not $selectedPort -or -not $server){ Write-Host 'Failed to start server on ports 8080/8081/8082.'; exit 2 }" ^
-"$url = 'http://localhost:' + $selectedPort + '/dj-visualizer.html';" ^
+"$url = 'http://127.0.0.1:' + $selectedPort + '/dj-visualizer.html';" ^
 "$chromeCandidates = @($env:ProgramFiles + '\\Google\\Chrome\\Application\\chrome.exe', ${env:ProgramFiles(x86)} + '\\Google\\Chrome\\Application\\chrome.exe', $env:LocalAppData + '\\Google\\Chrome\\Application\\chrome.exe');" ^
 "$edgeCandidates = @($env:ProgramFiles + '\\Microsoft\\Edge\\Application\\msedge.exe', ${env:ProgramFiles(x86)} + '\\Microsoft\\Edge\\Application\\msedge.exe', $env:LocalAppData + '\\Microsoft\\Edge\\Application\\msedge.exe');" ^
 "$chrome = $chromeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1;" ^

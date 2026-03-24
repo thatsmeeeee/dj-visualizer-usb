@@ -4,7 +4,7 @@ A single-file, browser-based DJ visualizer designed to live on a USB stick: plug
 
 It starts a local web server and opens:
 
-- `http://localhost:8080/dj-visualizer.html` (or `8081` / `8082` if busy)
+- `http://127.0.0.1:8080/dj-visualizer.html` (or `8081` / `8082` if busy)
 
 ## What's inside
 
@@ -24,7 +24,7 @@ It starts a local web server and opens:
 
 If it doesn't open, manually visit:
 
-- `http://localhost:8080/dj-visualizer.html`
+- `http://127.0.0.1:8080/dj-visualizer.html`
 - then try `8081` or `8082`.
 
 ### Windows requirements / notes
@@ -40,7 +40,7 @@ If it doesn't open, manually visit:
 If none are available, install **Python 3** or **Node.js**.
 
 If PowerShell execution is blocked by policy, the script prints a manual fallback command.
-If PowerShell is blocked, `start.bat` now auto-falls back to a CMD launch on `localhost:8080`.
+If PowerShell is blocked, `start.bat` now auto-falls back to a CMD launch on `127.0.0.1:8080`.
 
 ## Quick start (macOS)
 
@@ -53,7 +53,7 @@ If PowerShell is blocked, `start.bat` now auto-falls back to a CMD launch on `lo
 
 If it doesn't open, manually visit:
 
-- `http://localhost:8080/dj-visualizer.html`
+- `http://127.0.0.1:8080/dj-visualizer.html`
 - then try `8081` or `8082`.
 
 ### macOS requirements / notes
@@ -100,7 +100,7 @@ Hotkeys:
 - `M` — Mode
 - `C` — Color mode
 - `Q` — Quality mode (AUTO / HIGH / MED / LOW)
-- `T` — Toggle tuning panel
+- `T` — Show auto-tune status
 - `S` — Strobe toggle
 - `F` — Fullscreen
 - `G` — Debug overlay (FPS, audio levels)
@@ -111,10 +111,10 @@ Hotkeys:
 - **OPEN AIR** — more stable beat response for spacious/less compressed audio.
 - **LOW POWER** — safer defaults for weaker laptops.
 
-Use **TUNE** panel for live adjustments:
-- **SENSITIVITY** — how easily flashes react to signal changes.
-- **FLASH RATE** — overall flash intensity/rate scaling.
-- **SAFETY** — stricter/looser limiter behavior.
+`TUNE` is fully automatic (no manual sliders in runtime):
+- **SENSITIVITY** adapts by signal energy/transients.
+- **FLASH RATE** adapts by music intensity and performance headroom.
+- **SAFETY** tightens automatically when FPS drops or burst risk grows.
 
 ## Music-structure aware behavior
 
@@ -144,11 +144,18 @@ Something is already using those ports. Close the other process, or edit the lau
 ### "AUDIO DENIED"
 Grant permission for microphone / screen-share audio in your browser, then try again.
 
+### "AUDIO UNSUPPORTED"
+Your browser/context does not provide required `mediaDevices` APIs. Use Chrome or Edge.
+
 ### "NO SYSTEM AUDIO"
 Start again in `SYSTEM` or `MIX` mode and make sure **Share audio** is enabled in the browser share dialog.
 
 ### "SYSTEM AUDIO ENDED"
 Your screen-share audio track was stopped. Start audio again and re-share with audio enabled.
+
+### "! SYSTEM AUDIO MUTED" / "! AUDIO INTERRUPTED"
+Some browsers/OS states can temporarily mute or suspend captured audio (tab/background switch, device/power events).
+Return to the tab/app; the visualizer now tries to resume audio context automatically on foreground.
 
 ### No system audio captured
 Try a different browser (Chrome is the most consistent for screen/tab audio capture).
@@ -167,6 +174,34 @@ python3 smoke_test.py
 ```
 
 Expected result: `OK http://127.0.0.1:8080/dj-visualizer.html (...)` (or 8081/8082).
+
+If no local server is running yet, use:
+
+```bash
+python3 smoke_test.py --autostart
+```
+
+This starts a temporary loopback server, verifies the page, then stops it.
+
+## Full self-test
+
+Run the quick regression set:
+
+```bash
+python3 scripts/selftest.py
+```
+
+It validates smoke-test behavior (fail/auto/live-server modes), Python syntax, and `start.command` shell syntax.
+
+## Track behavior suite
+
+For real music-library validation (flash/beat behavior), run:
+
+```bash
+python3 scripts/track_suite.py /path/to/tracks --json-out output/track-suite.json
+```
+
+This reports coverage/weak-flash/downbeat metrics and a PASS/FAIL verdict for general + rave-like material.
 
 ## Test matrix
 

@@ -168,36 +168,6 @@
     box-shadow: none;
   }
 
-  #tune-panel {
-    position: fixed;
-    left: 22px;
-    top: 22px;
-    z-index: 101;
-    width: 240px;
-    border: 1px solid rgba(0,240,255,0.28);
-    background: rgba(0,0,0,0.66);
-    padding: 10px 10px 8px;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.2s;
-  }
-  #tune-panel.visible {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-  }
-  .tune-row { margin-bottom: 8px; }
-  .tune-row label {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: rgba(220,255,255,0.9);
-    margin-bottom: 4px;
-  }
-  .tune-row input[type="range"] { width: 100%; }
-
   /* ── LEVEL METERS ── */
   #meters {
     position: fixed;
@@ -402,26 +372,10 @@
   <button class="btn" id="btn-mode">MODE: ALL</button>
   <button class="btn" id="btn-color">COLOR: MONO</button>
   <button class="btn active" id="btn-quality">QUALITY: AUTO</button>
-  <button class="btn" id="btn-tune">TUNE</button>
   <button class="btn active danger" id="btn-strobe">STROBE: ON</button>
   <button class="btn" id="btn-fs">⛶ FULLSCREEN</button>
   <div class="sep"></div>
   <span id="status">● STANDBY</span>
-</div>
-
-<div id="tune-panel">
-  <div class="tune-row">
-    <label for="tune-sens"><span>SENSITIVITY</span><span id="tune-sens-v">1.00</span></label>
-    <input id="tune-sens" type="range" min="0.60" max="1.60" step="0.01" value="1.00">
-  </div>
-  <div class="tune-row">
-    <label for="tune-rate"><span>FLASH RATE</span><span id="tune-rate-v">1.00</span></label>
-    <input id="tune-rate" type="range" min="0.60" max="1.40" step="0.01" value="1.00">
-  </div>
-  <div class="tune-row">
-    <label for="tune-safe"><span>SAFETY</span><span id="tune-safe-v">1.00</span></label>
-    <input id="tune-safe" type="range" min="0.60" max="1.40" step="0.01" value="1.00">
-  </div>
 </div>
 
 <script>
@@ -436,6 +390,7 @@ const state = {
   analysisHz: 100,
   sourceNodes: [],
   mediaStreams: [],
+  systemAudioTrack: null,
   dataArray: null,
   prevFreqArray: null,
   waveArray: null,
@@ -476,6 +431,7 @@ const state = {
   beatHistory: new Array(30).fill(0),
   lastBeatTime: 0,
   lastBeatTimeSec: 0,
+  lastSyntheticBeatAt: 0,
   bpm: 0,
   beatTimes: [],
   bpmSmooth: 0,
@@ -534,10 +490,14 @@ const state = {
   // Presets
   presetIndex: 0,
   presets: [
-    { name: 'CLUB', fftSize: 2048, smoothing: 0.55, beatK: 1.35, highK: 1.75, beatCooldownMs: 120, bpmConfidenceMin: 0.25, maxStrobeHz: 10.0, qualityAuto: true, qualityLevel: 1, tuneSensitivity: 1.00, tuneFlashRate: 1.00, tuneSafety: 1.00 },
-    { name: 'OPEN AIR', fftSize: 4096, smoothing: 0.60, beatK: 1.25, highK: 1.55, beatCooldownMs: 110, bpmConfidenceMin: 0.20, maxStrobeHz: 11.0, qualityAuto: true, qualityLevel: 2, tuneSensitivity: 1.10, tuneFlashRate: 1.08, tuneSafety: 0.95 },
+    { name: 'CLUB', fftSize: 2048, smoothing: 0.55, beatK: 1.35, highK: 1.75, beatCooldownMs: 120, bpmConfidenceMin: 0.25, maxStrobeHz: 12.0, qualityAuto: true, qualityLevel: 1, tuneSensitivity: 1.00, tuneFlashRate: 1.00, tuneSafety: 1.00 },
+    { name: 'OPEN AIR', fftSize: 4096, smoothing: 0.60, beatK: 1.25, highK: 1.55, beatCooldownMs: 110, bpmConfidenceMin: 0.20, maxStrobeHz: 13.0, qualityAuto: true, qualityLevel: 2, tuneSensitivity: 1.10, tuneFlashRate: 1.08, tuneSafety: 0.95 },
     { name: 'LOW POWER', fftSize: 1024, smoothing: 0.50, beatK: 1.45, highK: 1.90, beatCooldownMs: 135, bpmConfidenceMin: 0.28, maxStrobeHz: 8.0, qualityAuto: false, qualityLevel: 0, tuneSensitivity: 0.92, tuneFlashRate: 0.86, tuneSafety: 1.12 },
   ],
+  autoTuneEnabled: true,
+  baseTuneSensitivity: 1.00,
+  baseTuneFlashRate: 1.00,
+  baseTuneSafety: 1.00,
   beatK: 1.35,
   highK: 1.75,
   beatCooldownMs: 120,
@@ -547,7 +507,6 @@ const state = {
   tuneSensitivity: 1.00,
   tuneFlashRate: 1.00,
   tuneSafety: 1.00,
-  tunePanelVisible: false,
 
   // Music states
   musicState: 'GROOVE', // CHILL | GROOVE | BUILD | DROP
@@ -645,7 +604,11 @@ const state = {
   ddFluxZ: 0,
 
   // State hold times
-  stateHoldTimes: { IDLE: 1500, BUILD: 3000, DROP: 2000, GROOVE: 2000, BREAKDOWN: 4000 },
+  stateHoldTimes: { IDLE: 1200, BUILD: 2200, DROP: 1400, GROOVE: 1300, BREAKDOWN: 2600 },
+  sectionWanted: 'GROOVE',
+  sectionReason: '',
+  sectionElapsedMs: 0,
+  sectionMinHoldMsDebug: 0,
   lastStateSwitchSec: 0,
 
   // Performance governor (auto quality)
@@ -686,16 +649,8 @@ const el = {
   btnMode: document.getElementById('btn-mode'),
   btnColor: document.getElementById('btn-color'),
   btnQuality: document.getElementById('btn-quality'),
-  btnTune: document.getElementById('btn-tune'),
   btnStrobe: document.getElementById('btn-strobe'),
   btnFs: document.getElementById('btn-fs'),
-  tunePanel: document.getElementById('tune-panel'),
-  tuneSens: document.getElementById('tune-sens'),
-  tuneRate: document.getElementById('tune-rate'),
-  tuneSafe: document.getElementById('tune-safe'),
-  tuneSensV: document.getElementById('tune-sens-v'),
-  tuneRateV: document.getElementById('tune-rate-v'),
-  tuneSafeV: document.getElementById('tune-safe-v'),
   ui: document.getElementById('ui'),
   meters: document.getElementById('meters'),
   modeLabel: document.getElementById('mode-label'),
@@ -798,18 +753,7 @@ function refreshPresetButton() {
 }
 
 function updateTuneUi() {
-  el.tuneSens.value = state.tuneSensitivity.toFixed(2);
-  el.tuneRate.value = state.tuneFlashRate.toFixed(2);
-  el.tuneSafe.value = state.tuneSafety.toFixed(2);
-  el.tuneSensV.textContent = state.tuneSensitivity.toFixed(2);
-  el.tuneRateV.textContent = state.tuneFlashRate.toFixed(2);
-  el.tuneSafeV.textContent = state.tuneSafety.toFixed(2);
-}
-
-function setTunePanelVisible(visible) {
-  state.tunePanelVisible = !!visible;
-  el.tunePanel.classList.toggle('visible', state.tunePanelVisible);
-  el.btnTune.classList.toggle('active', state.tunePanelVisible);
+  // Auto-tune is internal-only; no direct UI controls.
 }
 
 function getQualityProfile(level = state.qualityLevel) {
@@ -917,12 +861,34 @@ function lerpHue(a, b, t) {
 }
 
 function getSectionFadeAlpha() {
-  if (state.musicState === 'IDLE')      return 0.55;
+  if (state.musicState === 'IDLE')      return 0.30;
   if (state.musicState === 'DROP')      return 0.02;
-  if (state.musicState === 'BUILD')     return 0.08;
-  if (state.musicState === 'GROOVE')    return 0.22;
-  if (state.musicState === 'BREAKDOWN') return 0.42;
-  return 0.22;
+  if (state.musicState === 'BUILD')     return 0.06;
+  if (state.musicState === 'GROOVE')    return 0.12;
+  if (state.musicState === 'BREAKDOWN') return 0.20;
+  return 0.14;
+}
+
+function getSectionFlashGain() {
+  if (state.musicState === 'IDLE') return 0.10;
+  if (state.musicState === 'BREAKDOWN') return 0.22;
+  if (state.musicState === 'GROOVE') return 0.90;
+  if (state.musicState === 'BUILD') return 1.25;
+  if (state.musicState === 'DROP') return 2.50;
+  return 0.75;
+}
+
+function isRhythmicBeatLock(now = performance.now()) {
+  const bpm = Math.round(state.bpmSmooth || 0);
+  const recent = bpm >= 105 && bpm <= 180 && (now - state.lastBpmAt) < 6000;
+  return recent && state.bpmConfidence >= 0.20;
+}
+
+function getReactiveFlashGain() {
+  const hot = getFlashHotScore();
+  const transient = clamp(state.onsetPulse * 0.8 + Math.max(0, state.fluxTrend) * 0.35 + state.subBassSmooth * 0.4, 0, 1.4);
+  const signalGain = clamp(0.72 + hot * 1.55 + transient * 0.55, 0.72, 2.4);
+  return Math.max(getSectionFlashGain(), signalGain);
 }
 
 function getSectionDrawAlpha() {
@@ -961,7 +927,7 @@ function createEdmDropDetector({ sampleRate, fftSize, binCount }) {
   const z = (s, x) => (x - s.mu) / Math.sqrt(s.v);
   let prev = new Uint8Array(binCount);
   let lastDropAt = -999, lastStateAt = -999, lastDipAt = -999, lastBreakdownAt = -999;
-  const MIN_HOLD = 2.5, DROP_REFRACT = 10.0, BREAKDOWN_REFRACT = 5.0;
+  const MIN_HOLD = 1.5, DROP_REFRACT = 5.5, BREAKDOWN_REFRACT = 4.0;
   const bandMean = (arr, i0, i1) => {
     let s=0, n=0;
     for (let i=i0; i<=i1; i++) { s += arr[i] || 0; n++; }
@@ -998,21 +964,21 @@ function createEdmDropDetector({ sampleRate, fftSize, binCount }) {
       const dipNow = (eFast < 0.78 * eSlow) && (fluxFast < fluxSlow * 0.9);
       if (dipNow) lastDipAt = nowSec;
 
-      const buildHit = (fluxZ > 1.8 && hiRatio > 1.12 && eRatio > 1.05 && bassRatio < 1.05);
-      build += ((buildHit ? 1 : 0) - build) * (buildHit ? 0.25 : 0.08);
+      const buildHit = (fluxZ > 1.05 && hiRatio > 1.02 && eRatio > 1.00 && bassRatio < 1.16);
+      build += ((buildHit ? 1 : 0) - build) * (buildHit ? 0.40 : 0.04);
 
-      const dipRecent = (nowSec - lastDipAt) < 1.6;
+      const dipRecent = (nowSec - lastDipAt) < 2.8;
       const refractOk = (nowSec - lastDropAt) > DROP_REFRACT;
       const breakdownOk = (nowSec - lastBreakdownAt) > BREAKDOWN_REFRACT;
-      const dropHit = refractOk && dipRecent && build > 0.55 && (bassZ > 2.6) && (eRatio > 1.25) && (fluxZ > 1.0);
-      drop += ((dropHit ? 1 : 0) - drop) * (dropHit ? 0.35 : 0.12);
+      const dropHit = refractOk && dipRecent && build > 0.34 && (bassZ > 1.45) && (eRatio > 1.08) && (fluxZ > 0.30);
+      drop += ((dropHit ? 1 : 0) - drop) * (dropHit ? 0.52 : 0.06);
 
       const canSwitch = (nowSec - lastStateAt) > MIN_HOLD;
       let wanted = section;
       const silenceHit = energy < 0.04 && eFast < 0.05;
       if (silenceHit) wanted = 'IDLE';
-      else if (drop > 0.65) wanted = 'DROP';
-      else if (build > 0.60) wanted = 'BUILD';
+      else if (drop > 0.40) wanted = 'DROP';
+      else if (build > 0.34) wanted = 'BUILD';
       else if (eRatio < 0.92 && fluxFast < fluxSlow * 0.85 && breakdownOk) wanted = 'BREAKDOWN';
       else wanted = 'GROOVE';
 
@@ -1084,10 +1050,33 @@ function updateMusicState(now, detectorState = null) {
 
   const nowSec = state.audioCtx ? state.audioCtx.currentTime : (now / 1000);
   const prev = state.musicState;
-  const wanted = detectorState || prev;
+  let wanted = detectorState || prev;
+  let reason = detectorState ? `detector:${detectorState}` : 'detector:none';
+
+  // Keep BUILD/DROP sticky for a short while and allow fallback promotion
+  // when detector confidence is present but state output lags in transitions.
+  if (prev === 'DROP' && wanted !== 'DROP' && state.ddDrop > 0.26) {
+    wanted = 'DROP';
+    reason = 'sticky:drop';
+  }
+  if (prev === 'BUILD' && wanted === 'GROOVE' && state.ddBuild > 0.24) {
+    wanted = 'BUILD';
+    reason = 'sticky:build';
+  }
+  if (wanted === 'GROOVE' && state.ddDrop > 0.34 && state.subBassSmooth > 0.14) {
+    wanted = 'DROP';
+    reason = 'fallback:drop';
+  } else if (wanted === 'GROOVE' && state.ddBuild > 0.30 && state.ddFluxZ > 0.55) {
+    wanted = 'BUILD';
+    reason = 'fallback:build';
+  }
 
   const minHold = state.stateHoldTimes[prev] ?? 2000;
   const elapsed = (nowSec - state.lastStateSwitchSec) * 1000;
+  state.sectionWanted = wanted;
+  state.sectionReason = reason;
+  state.sectionElapsedMs = elapsed;
+  state.sectionMinHoldMsDebug = minHold;
   if (wanted !== prev && elapsed > minHold) {
     state.musicState = wanted;
     state.lastStateSwitchSec = nowSec;
@@ -1097,16 +1086,16 @@ function updateMusicState(now, detectorState = null) {
       state.dropImpactFrames = 8;
       state.impactPulse = Math.max(state.impactPulse, 1.6);
       const transitionHot = getFlashHotScore();
-      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && transitionHot > 0.55 && canTriggerFlashEvent(now)) {
-        state.flashOpacity = Math.max(state.flashOpacity, 1.25 + transitionHot * 1.35);
-        state.floodFrames = 3;
+      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && transitionHot > 0.42 && canTriggerFlashEvent(now)) {
+        state.flashOpacity = Math.max(state.flashOpacity, 1.85 + transitionHot * 1.75);
+        state.floodFrames = 5;
         state.floodHue = getPaletteHue(24 + Math.random() * 36);
         SafetyLimiter.recordFlash(now);
       }
-      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && transitionHot > 0.50) {
-        triggerStrobePulse(1.0 + transitionHot * 0.4, now);
+      if (state.strobeEnabled && canBeatPhaseTrigger(nowSec, 0.02) && transitionHot > 0.40) {
+        triggerStrobePulse(1.15 + transitionHot * 0.55, now);
       }
-      spawnBurst(24 + Math.floor(36 * transitionHot));
+      spawnBurst(36 + Math.floor(52 * transitionHot));
     }
   }
 
@@ -1114,31 +1103,31 @@ function updateMusicState(now, detectorState = null) {
 
   // ── Visual targets per state ─────────────────────────────────────────────
   let targetMul        = 1;
-  let targetBrightness = 0.5;
+  let targetBrightness = 0.62;
   let targetMotion     = 1;
 
   if (state.musicState === 'IDLE') {
-    targetMul        = 0.05;
-    targetBrightness = 0.05;
-    targetMotion     = 0.2;
+    targetMul        = 0.18;
+    targetBrightness = 0.34;
+    targetMotion     = 0.30;
   } else if (state.musicState === 'BUILD') {
     // Ramp: as ratio climbs toward ~1.5, push toward full intensity
     const slope = clamp((ratio - 1.05) / 0.45, 0, 1);
-    targetMul        = 0.3 + slope * 1.15;
-    targetBrightness = 0.3 + slope * 0.6;
-    targetMotion     = 0.8 + slope * 0.7;
+    targetMul        = 0.55 + slope * 1.10;
+    targetBrightness = 0.56 + slope * 0.62;
+    targetMotion     = 0.82 + slope * 0.70;
   } else if (state.musicState === 'DROP') {
-    targetMul        = 2.4;
-    targetBrightness = 1.25;
-    targetMotion     = 2.15;
+    targetMul        = 2.65;
+    targetBrightness = 1.35;
+    targetMotion     = 2.45;
   } else if (state.musicState === 'GROOVE') {
-    targetMul        = 0.95;
-    targetBrightness = 0.6;
-    targetMotion     = 1.2;
+    targetMul        = 0.98;
+    targetBrightness = 0.72;
+    targetMotion     = 0.95;
   } else if (state.musicState === 'BREAKDOWN') {
-    targetMul        = 0.2;
-    targetBrightness = 0.15;
-    targetMotion     = 0.4;
+    targetMul        = 0.32;
+    targetBrightness = 0.42;
+    targetMotion     = 0.55;
   }
 
   // DROP impact boost
@@ -1157,6 +1146,8 @@ function updateMusicState(now, detectorState = null) {
   state.visualMotionTarget     = targetMotion;
   state.visualBrightness += (state.visualBrightnessTarget - state.visualBrightness) * 0.06;
   state.visualMotion     += (state.visualMotionTarget     - state.visualMotion)     * 0.08;
+  // Keep visuals readable during live playback even in calmer sections.
+  state.visualBrightness = Math.max(state.visualBrightness, 0.34);
 }
 
 function applyPreset(index) {
@@ -1168,6 +1159,9 @@ function applyPreset(index) {
   state.bpmConfidenceMin = p.bpmConfidenceMin;
   state.baseMaxStrobeHz = p.maxStrobeHz;
   state.maxStrobeHz = p.maxStrobeHz;
+  state.baseTuneSensitivity = p.tuneSensitivity;
+  state.baseTuneFlashRate = p.tuneFlashRate;
+  state.baseTuneSafety = p.tuneSafety;
   state.tuneSensitivity = p.tuneSensitivity;
   state.tuneFlashRate = p.tuneFlashRate;
   state.tuneSafety = p.tuneSafety;
@@ -1177,6 +1171,44 @@ function applyPreset(index) {
   refreshPresetButton();
   refreshQualityButton();
   updateTuneUi();
+}
+
+function updateAutoTune() {
+  if (!state.autoTuneEnabled) return;
+
+  const reactiveGain = getReactiveFlashGain();
+  const signalRaw =
+    state.energySmooth * 0.9 +
+    state.subBassSmooth * 0.65 +
+    state.fluxTrend * 0.8 +
+    state.bassSpike * 0.6 +
+    state.harmonicTension * 0.35;
+  const signal = clamp((signalRaw - 0.22) / 1.0, 0, 1);
+
+  const fpsPenalty = clamp((46 - state.fpsEma) / 20, 0, 1);
+  const qualityPenalty = state.qualityAuto
+    ? fpsPenalty
+    : (state.qualityLevel === 0 ? 0.35 : state.qualityLevel === 1 ? 0.15 : 0);
+
+  const sensTarget = clamp(
+    state.baseTuneSensitivity * (0.92 + signal * 0.34 - qualityPenalty * 0.10),
+    0.70,
+    1.60
+  );
+  const rateTarget = clamp(
+    state.baseTuneFlashRate * (0.92 + signal * 0.62 + reactiveGain * 0.26 - qualityPenalty * 0.28),
+    0.60,
+    1.65
+  );
+  const safeTarget = clamp(
+    state.baseTuneSafety * (1.02 - signal * 0.20 - reactiveGain * 0.16 + qualityPenalty * 0.30),
+    0.60,
+    1.40
+  );
+
+  state.tuneSensitivity += (sensTarget - state.tuneSensitivity) * 0.08;
+  state.tuneFlashRate += (rateTarget - state.tuneFlashRate) * 0.08;
+  state.tuneSafety += (safeTarget - state.tuneSafety) * 0.08;
 }
 
 function applyPresetToRunningAnalyser() {
@@ -1244,13 +1276,14 @@ function getMusicalAccentStrength() {
 
 function getFlashBudget() {
   const hot = getFlashHotScore();
-  const subBoost = state.subBass > 0.62 ? 1 : 0;
+  const reactiveGain = getReactiveFlashGain();
+  const subBoost = state.subBass > 0.56 ? 1 : 0;
   const tempoBoost = state.bpmConfidence > 0.45 ? 1 : 0;
   const downbeatBoost = state.beatInBar === 1 ? 1 : 0;
-  const phraseBoost = state.phraseBoundaryPulse > 0.62 ? 1 : 0;
-  const betweenThrottle = (state.beatInBar !== 1 && hot < 0.55 && state.harmonicTension < 0.35) ? -1 : 0;
-  const bySignal = Math.round(1 + hot * 8) + subBoost + tempoBoost + downbeatBoost + phraseBoost + betweenThrottle;
-  const hardCap = Math.max(2, Math.floor((state.maxStrobeHz || 10) * state.tuneFlashRate));
+  const phraseBoost = state.phraseBoundaryPulse > 0.52 ? 1 : 0;
+  const betweenThrottle = (state.beatInBar !== 1 && hot < 0.48 && state.harmonicTension < 0.30) ? -1 : 0;
+  const bySignal = Math.round((2 + hot * 10) * reactiveGain) + subBoost + tempoBoost + downbeatBoost + phraseBoost + betweenThrottle;
+  const hardCap = Math.max(2, Math.floor((state.maxStrobeHz || 10) * state.tuneFlashRate * 1.35 * reactiveGain));
   return clamp(bySignal, 1, hardCap);
 }
 
@@ -1291,8 +1324,9 @@ const SafetyLimiter = {
     while (this.burstTimes.length && this.burstTimes[0] < burstMin) this.burstTimes.shift();
 
     const safety = clamp(state.tuneSafety, 0.6, 1.4);
-    const safetyMul = 1.55 - safety; // safety=1.4 => stricter, safety=0.6 => looser
-    const sustainedLimit = Math.max(2, Math.floor((state.maxStrobeHz || 3) * state.tuneFlashRate * safetyMul));
+    const reactiveGain = getReactiveFlashGain();
+    const safetyMul = clamp(1.8 - safety, 0.35, 1.2); // allow more flashes while keeping hard guard
+    const sustainedLimit = Math.max(2, Math.floor((state.maxStrobeHz || 3) * state.tuneFlashRate * safetyMul * reactiveGain));
     const hardGuardLimit = Math.max(14, sustainedLimit + 7);
     const burstLimit = Math.max(7, Math.floor(sustainedLimit * 2.1));
 
@@ -1333,6 +1367,14 @@ const SafetyLimiter = {
       else break;
     }
     return c;
+  },
+  allowBeatPriority(now) {
+    if (now < this.cooldownUntil) return false;
+    const oneSecMin = now - 1000;
+    while (this.oneSecTimes.length && this.oneSecTimes[0] < oneSecMin) this.oneSecTimes.shift();
+    const presetRate = Math.max(2, (state.maxStrobeHz || 10) * Math.max(0.6, state.tuneFlashRate));
+    const hardGuardLimit = Math.max(14, Math.floor(presetRate * 1.8));
+    return this.oneSecTimes.length < hardGuardLimit;
   }
 };
 
@@ -1402,6 +1444,7 @@ const MainController = {
       `flux: ${BeatEngine.metrics.flux.toFixed(3)}  fluxTrend: ${state.fluxTrend.toFixed(3)}`,
       `bassSpike: ${BeatEngine.metrics.bassSpike.toFixed(3)}  bassZ: ${BeatEngine.metrics.bassZ.toFixed(2)}`,
       `fluxZ: ${BeatEngine.metrics.fluxZ.toFixed(2)}  build: ${BeatEngine.metrics.build.toFixed(2)}  drop: ${BeatEngine.metrics.drop.toFixed(2)}`,
+      `secWanted: ${state.sectionWanted} via ${state.sectionReason}  hold: ${Math.round(state.sectionElapsedMs)}/${Math.round(state.sectionMinHoldMsDebug)}ms`,
       `beatETA: ${(state.nextBeatAt - nowSec).toFixed(3)}s  beatPhaseConf: ${state.beatPhaseConfidence.toFixed(2)}`,
       `meter: ${state.beatInBar}/${state.meterBeats}  downbeatConf: ${state.downbeatConfidence.toFixed(2)}  phrase: ${(state.phraseProgress*100).toFixed(0)}%`,
       `key: ${state.keyIndex >= 0 ? NOTE_NAMES[state.keyIndex] : '?'} ${state.keyMode}  keyConf: ${state.keyConfidence.toFixed(2)}  harmTension: ${state.harmonicTension.toFixed(2)}`,
@@ -1431,14 +1474,30 @@ resetPerformanceGovernor(performance.now(), true);
 refreshQualityButton();
 refreshPresetButton();
 updateTuneUi();
-setTunePanelVisible(false);
 window.addEventListener('resize', resize);
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', async () => {
   if (document.hidden) {
     state.governorPaused = true;
+    // Hidden tabs are throttled; pause analysis timer to avoid stale timing drift.
+    stopAnalysisLoop();
     return;
   }
   resetPerformanceGovernor(performance.now(), true);
+  if (state.running && state.analyser && !state.analysisTimer) {
+    startAnalysisLoop();
+  }
+  if (state.running && state.audioCtx && state.audioCtx.state !== 'running') {
+    try {
+      await state.audioCtx.resume();
+      setStatusOverride('● LIVE  AUDIO RESUMED', 1200);
+    } catch (_) {
+      setStatusOverride('✗ AUDIO PAUSED - CLICK START', 1800);
+    }
+  }
+});
+window.addEventListener('pagehide', () => {
+  if (!state.running) return;
+  stopAudio().catch(() => {});
 });
 
 function startAnalysisLoop() {
@@ -1447,6 +1506,7 @@ function startAnalysisLoop() {
   state.analysisTimer = setInterval(() => {
     if (!state.running || !state.analyser) return;
     analyzeAudio();
+    updateAutoTune();
     BeatEngine.update();
     IntensityEngine.update();
   }, intervalMs);
@@ -1489,8 +1549,25 @@ async function getSystemCaptureStream() {
 async function startAudio() {
   try {
     await stopAudio();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !navigator.mediaDevices.getDisplayMedia) {
+      throw new Error('MEDIA_DEVICES_UNAVAILABLE');
+    }
     const preset = state.presets[state.presetIndex];
     state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    state.audioCtx.onstatechange = () => {
+      if (!state.running) return;
+      const s = state.audioCtx ? state.audioCtx.state : 'closed';
+      if (s === 'interrupted' || s === 'suspended') {
+        setStatusOverride('! AUDIO INTERRUPTED', 1200);
+      }
+    };
+    if (state.audioCtx.state !== 'running') {
+      try {
+        await state.audioCtx.resume();
+      } catch (_) {
+        // Autoplay policy/user gesture edge case: handled by existing error path.
+      }
+    }
     state.analyser = state.audioCtx.createAnalyser();
     state.analyser.fftSize = preset.fftSize;
     state.analyser.smoothingTimeConstant = preset.smoothing;
@@ -1524,11 +1601,20 @@ async function startAudio() {
         throw new Error('SYSTEM_AUDIO_MISSING');
       }
       const sysAudioTrack = sysAudioTracks[0];
+      state.systemAudioTrack = sysAudioTrack;
       sysAudioTrack.addEventListener('ended', () => {
         if (!state.running) return;
         stopAudio().then(() => {
           el.status.textContent = '✗ SYSTEM AUDIO ENDED';
         }).catch(() => {});
+      });
+      sysAudioTrack.addEventListener('mute', () => {
+        if (!state.running) return;
+        setStatusOverride('! SYSTEM AUDIO MUTED', 1200);
+      });
+      sysAudioTrack.addEventListener('unmute', () => {
+        if (!state.running) return;
+        setStatusOverride('● LIVE  SYSTEM AUDIO RESTORED', 1200);
       });
       state.mediaStreams.push(sysStream);
       const sysSource = state.audioCtx.createMediaStreamSource(sysStream);
@@ -1567,6 +1653,12 @@ async function startAudio() {
       return;
     }
 
+    if (e && e.message === 'MEDIA_DEVICES_UNAVAILABLE') {
+      el.status.textContent = '✗ AUDIO UNSUPPORTED';
+      alert('Tento prohlížeč nepodporuje potřebné audio API (mediaDevices). Otevři aplikaci v Chrome nebo Edge.');
+      return;
+    }
+
     if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) {
       el.status.textContent = '✗ AUDIO DENIED';
       alert('Přístup k audio zdroji byl zamítnut. Povol mikrofon/sdílení zvuku v prohlížeči.');
@@ -1586,8 +1678,10 @@ async function stopAudio() {
   });
   state.mediaStreams = [];
   state.sourceNodes = [];
+  state.systemAudioTrack = null;
 
   if (state.audioCtx) {
+    state.audioCtx.onstatechange = null;
     await state.audioCtx.close();
     state.audioCtx = null;
   }
@@ -1652,6 +1746,7 @@ async function stopAudio() {
   state.phraseProgress = 0;
   state.phraseBoundaryPulse = 0;
   state.lastBeatTimeSec = 0;
+  state.lastSyntheticBeatAt = 0;
   state.lastStateSwitchSec = 0;
   state.spectralFlux = 0;
   state.fluxSmooth = 0;
@@ -1877,14 +1972,20 @@ function analyzeAudio() {
 
   // ── Micro flashes on high transients ──────────────────────────────────────
   const highTransient = highFluxNorm > (highFluxStats.mean + (state.highK * 0.82) * highFluxStats.std);
-  const microFlashAllowed = getFlashHotScore() > 0.46;
-  const beatWindowOk = Math.abs(nowSec - state.nextBeatAt) <= 0.05;
-  if (state.strobeEnabled && microFlashAllowed && beatWindowOk && highTransient && (now - state.lastMicroFlashAt) > 180 && canTriggerFlashEvent(now)) {
-    const p = 0.48 + clamp(highFluxNorm * 4.8, 0, 0.48);
+  const reactiveFlashGain = getReactiveFlashGain();
+  const sectionMicroBoost = state.musicState === 'DROP' ? 0.12 : (state.musicState === 'BUILD' ? 0.08 : 0);
+  const microFlashAllowed = getFlashHotScore() > (0.42 - reactiveFlashGain * 0.18 - sectionMicroBoost);
+  const beatPeriod = clamp(state.beatPeriodSec || 0.5, 0.25, 1.2);
+  const beatDist = Math.abs(nowSec - state.nextBeatAt);
+  const beatProximity = 1 - clamp(beatDist / Math.max(0.08, beatPeriod * 0.45), 0, 1);
+  const offbeatTransientOk = highFluxNorm > (highFluxStats.mean + (state.highK * 0.60) * highFluxStats.std);
+  if (state.strobeEnabled && microFlashAllowed && (beatProximity > 0.14 || offbeatTransientOk) && highTransient && (now - state.lastMicroFlashAt) > (130 - reactiveFlashGain * 55) && canTriggerFlashEvent(now)) {
+    const sectionProbBoost = state.musicState === 'DROP' ? 0.18 : (state.musicState === 'BUILD' ? 0.10 : 0);
+    const p = 0.48 + sectionProbBoost + beatProximity * 0.16 + clamp(highFluxNorm * 4.8, 0, 0.26 + reactiveFlashGain * 0.30);
     if (Math.random() < p) {
       state.flashColorPhase = !state.flashColorPhase;
       state.microFlashOpacity = Math.max(state.microFlashOpacity,
-        0.52 + clamp(highFluxNorm * 2.8, 0, 0.95));
+        0.58 + clamp(highFluxNorm * 2.8, 0, 1.05));
       state.lastMicroFlashAt = now;
       SafetyLimiter.recordFlash(now);
     }
@@ -1907,7 +2008,7 @@ function analyzeAudio() {
   // ── Auto blackout during long silences ───────────────────────────────────
   if (silenceGate) state.lowEnergyMs += (state.frameDtMs || 16);
   else             state.lowEnergyMs = Math.max(0, state.lowEnergyMs - (state.frameDtMs || 16) * 1.5);
-  if (state.lowEnergyMs > 800 && state.bpmConfidence < 0.35)
+  if (state.lowEnergyMs > 2200 && state.bpmConfidence < 0.25 && state.energySmooth < 0.08)
     state.autoBlackoutFrames = Math.max(state.autoBlackoutFrames, 12);
 
   // ── Beat confirmed: BPM tracking + visual triggers ────────────────────────
@@ -1995,11 +2096,45 @@ function analyzeAudio() {
 
     state.lastBeatTime = now;
     state.lastBeatTimeSec = nowSec;
-    onBeat();
+    onBeat(false);
   } else {
     state.beatPhaseTriggerNow = false;
     state.beatPhaseConfidence = Math.max(0, state.beatPhaseConfidence - 0.002);
     state.phraseBoundaryPulse *= 0.985;
+
+    // Beat lock interpolation: when rhythm is stable, dispatch synthetic beats
+    // between strong transients so flashes stay on every beat, not only on peaks.
+    const rhythmicBeatLock = isRhythmicBeatLock(now);
+    const periodOk = state.beatPeriodSec > 0.25 && state.beatPeriodSec < 1.2;
+    const lockEnergyFloor = state.energySmooth > 0.11 || state.musicState === 'GROOVE' || state.musicState === 'BUILD' || state.musicState === 'DROP';
+    if (rhythmicBeatLock && lockEnergyFloor && periodOk && state.nextBeatAt > 0 && state.beatPhaseConfidence >= 0.25) {
+      const lookAheadSec = 0.02;
+      const lateSec = 0.08;
+
+      if (nowSec > state.nextBeatAt + lateSec) {
+        const skips = Math.floor((nowSec - state.nextBeatAt) / state.beatPeriodSec);
+        state.nextBeatAt += Math.max(1, skips) * state.beatPeriodSec;
+      }
+
+      const phaseDue = nowSec >= (state.nextBeatAt - lookAheadSec);
+      const spacingOk = (nowSec - state.lastBeatTimeSec) > (state.beatPeriodSec * 0.45);
+      const syntheticSpacingOk = (state.nextBeatAt - state.lastSyntheticBeatAt) > (state.beatPeriodSec * 0.55);
+      if (phaseDue && spacingOk && syntheticSpacingOk) {
+        state.beatPhaseTriggerNow = true;
+        const accent = (
+          state.subBassSmooth * 1.0 +
+          state.energySmooth * 0.6 +
+          clamp(highFluxNorm * 1.2, 0, 1) * 0.4
+        );
+        updateMusicalMeter(accent);
+        state.lastBeatTime = now;
+        state.lastBeatTimeSec = state.nextBeatAt;
+        state.lastSyntheticBeatAt = state.nextBeatAt;
+        state.nextBeatAt += state.beatPeriodSec;
+        state.beatPhaseConfidence = Math.min(1, state.beatPhaseConfidence + 0.02);
+        onBeat(true);
+      }
+    }
   }
 
   state.rms          = rawRms;
@@ -2022,52 +2157,78 @@ function analyzeAudio() {
     && (now - state.lastBpmAt) < 5000
     && state.bpmConfidence >= state.bpmConfidenceMin;
 
-  if (hasRecentBpm && state.strobeEnabled && state.strobeMode === 1) {
+  if (hasRecentBpm && state.strobeEnabled && (state.strobeMode === 1 || state.strobeMode === 2)) {
     const beatMs = 60000 / bpmForSync;
     let division = 1;
-    if      (state.intensity >= 0.75) division = 4;
-    else if (state.intensity >= 0.45) division = 2;
+    if (state.strobeMode === 2) {
+      if      (state.intensity >= 0.95) division = 6;
+      else if (state.intensity >= 0.65) division = 4;
+      else if (state.intensity >= 0.40) division = 3;
+      else division = 2;
+    } else {
+      if      (state.intensity >= 0.75) division = 4;
+      else if (state.intensity >= 0.45) division = 2;
+    }
     const stepMs = beatMs / division;
     if (!state.nextStrobeAt || (now - state.nextStrobeAt) > beatMs * 2)
       state.nextStrobeAt = now;
     if (now >= state.nextStrobeAt) {
       while (state.nextStrobeAt <= now) state.nextStrobeAt += stepMs;
       const hg = clamp((state.highSmooth - 0.02) / 0.2, 0, 1);
-      if (hg > 0.01 && canBeatPhaseTrigger(nowSec, 0.02)) triggerStrobePulse(1 + hg * 0.95, now);
+      if (hg > 0.01) triggerStrobePulse((state.strobeMode === 2 ? 1.12 : 1.0) + hg * (state.strobeMode === 2 ? 1.10 : 0.95), now);
     }
   } else if (state.strobeEnabled && (state.strobeMode === 0 || state.strobeMode === 1)) {
     const hg = clamp((state.highSmooth - 0.04) / 0.24, 0, 1);
-    const transient = highRise > 0.006 || highTransient;
-    const minGap = state.strobeMode === 1 ? 28 : 18;
+    const transient = highRise > 0.004 || highTransient;
+    const minGap = state.strobeMode === 1 ? (24 - reactiveFlashGain * 6) : (16 - reactiveFlashGain * 6);
     const base   = state.strobeMode === 1 ? 0.9 : 0.8;
-    if (transient && hg > 0.02 && canBeatPhaseTrigger(nowSec, 0.02) && (now - state.lastStrobeHit) > minGap)
+    if (transient && hg > 0.02 && canBeatPhaseTrigger(nowSec, 0.08) && (now - state.lastStrobeHit) > minGap)
       triggerStrobePulse(base + hg * 1.15, now);
   }
 }
 
 
-function onBeat() {
+function onBeat(isSynthetic = false) {
   const live = 1 - state.idleBlend;
+  const rhythmicBeatLock = isRhythmicBeatLock();
+  const reactiveFlashGain = getReactiveFlashGain();
+  const sectionFlashGain = rhythmicBeatLock ? Math.max(1.0, reactiveFlashGain) : reactiveFlashGain;
   const rage = 1 + state.energyAccumulator * 1.1;
   const now = performance.now();
-  const beatFlashConfidence = 0.3 + state.bpmConfidence * 0.7;
+  const beatFlashConfidence = (0.3 + state.bpmConfidence * 0.7) * (isSynthetic ? 0.92 : 1);
   const beatPhaseOk = state.beatPhaseTriggerNow;
   const hotScore = getFlashHotScore();
-  const hotSignal = hotScore > 0.46;
+  const hotSignal = rhythmicBeatLock ? (hotScore > 0.16) : (hotScore > (0.48 - sectionFlashGain * 0.16));
   const downbeat = state.beatInBar === 1;
-  const weakBeatGate = hotScore > 0.32 || (downbeat && state.downbeatConfidence > 0.35);
+  const weakBeatGate = rhythmicBeatLock || hotScore > (0.34 - sectionFlashGain * 0.20) || (downbeat && state.downbeatConfidence > 0.30);
   const hotBeatFlashAllowed = state.strobeEnabled
     && beatPhaseOk
-    && state.bpmConfidence >= 0.18
+    && state.bpmConfidence >= (rhythmicBeatLock ? 0.20 : Math.max(0.06, 0.16 - sectionFlashGain * 0.06))
     && hotSignal
-    && SafetyLimiter.allowFlash(now, true);
+    && (rhythmicBeatLock ? SafetyLimiter.allowBeatPriority(now) : SafetyLimiter.allowFlash(now, true));
+  const lockEnergyFloor = state.energySmooth > 0.11 || state.musicState === 'GROOVE' || state.musicState === 'BUILD' || state.musicState === 'DROP';
+  const rhythmicGuaranteedBeatFlash = rhythmicBeatLock
+    && lockEnergyFloor
+    && state.strobeEnabled
+    && beatPhaseOk
+    && SafetyLimiter.allowBeatPriority(now);
+  const nonLockHotGate = state.musicState === 'DROP' ? 0.42 : (state.musicState === 'BUILD' ? 0.48 : 0.55);
+  const nonLockEnergyGate = state.musicState === 'DROP' ? 0.12 : (state.musicState === 'BUILD' ? 0.14 : 0.16);
+  const nonLockBassGate = state.musicState === 'DROP' ? 0.16 : (state.musicState === 'BUILD' ? 0.18 : 0.20);
+  const nonLockEnergyFallback = !rhythmicBeatLock
+    && state.strobeEnabled
+    && hotScore > nonLockHotGate
+    && (state.energySmooth > nonLockEnergyGate || state.subBass > nonLockBassGate)
+    && SafetyLimiter.allowFlash(now, false);
   const beatFlashAllowed = hotBeatFlashAllowed
+    || rhythmicGuaranteedBeatFlash
+    || nonLockEnergyFallback
     || (
       state.strobeEnabled &&
       beatPhaseOk &&
-      state.bpmConfidence >= 0.2 &&
+      state.bpmConfidence >= (rhythmicBeatLock ? 0.18 : Math.max(0.08, 0.18 - sectionFlashGain * 0.08)) &&
       weakBeatGate &&
-      canTriggerFlashEvent(now)
+      (rhythmicBeatLock ? SafetyLimiter.allowBeatPriority(now) : canTriggerFlashEvent(now))
     );
   state.beatPulse = 1.0;
   state.flashColorPhase = !state.flashColorPhase;
@@ -2078,8 +2239,18 @@ function onBeat() {
   if (beatFlashAllowed) {
     const downbeatBoost = downbeat ? (1 + 0.18 + state.downbeatConfidence * 0.24) : 1;
     const phraseBoost = 1 + state.phraseBoundaryPulse * 0.22;
-    const energyPulse = hotScore > 0.68 ? 1.12 : 1;
-    state.flashOpacity = Math.min(2.8, (0.8 + state.subBass * 1.7 * i) * rage * (0.75 + live * 1.05) * beatFlashConfidence * downbeatBoost * phraseBoost * energyPulse);
+    const energyPulse = hotScore > 0.60 ? 1.28 : 1;
+    const dropBoost = state.musicState === 'DROP' ? 1.75 : 1;
+    const buildBoost = state.musicState === 'BUILD' ? 1.22 : 1;
+    const rhythmicBoost = rhythmicBeatLock ? 1.28 : 1;
+    state.flashOpacity = Math.min(3.5, (0.7 + state.subBass * 1.7 * i) * rage * (0.72 + live * 1.02) * beatFlashConfidence * downbeatBoost * phraseBoost * energyPulse * sectionFlashGain * dropBoost * buildBoost);
+    state.flashOpacity *= rhythmicBoost;
+    if (nonLockEnergyFallback) {
+      state.flashOpacity = Math.max(0.55, state.flashOpacity * 0.72);
+    }
+    if (rhythmicGuaranteedBeatFlash) {
+      state.flashOpacity = Math.max(state.flashOpacity, 0.95);
+    }
     SafetyLimiter.recordFlash(now);
   } else {
     state.flashOpacity = Math.min(state.flashOpacity, 0.02);
@@ -3245,25 +3416,6 @@ el.btnQuality.addEventListener('click', () => {
   refreshQualityButton();
 });
 
-el.btnTune.addEventListener('click', () => {
-  setTunePanelVisible(!state.tunePanelVisible);
-});
-
-el.tuneSens.addEventListener('input', () => {
-  state.tuneSensitivity = parseFloat(el.tuneSens.value);
-  updateTuneUi();
-});
-
-el.tuneRate.addEventListener('input', () => {
-  state.tuneFlashRate = parseFloat(el.tuneRate.value);
-  updateTuneUi();
-});
-
-el.tuneSafe.addEventListener('input', () => {
-  state.tuneSafety = parseFloat(el.tuneSafe.value);
-  updateTuneUi();
-});
-
 el.btnStrobe.addEventListener('click', () => {
   state.strobeMode = 2;
   state.beatDivIndex = 2;
@@ -3327,7 +3479,7 @@ document.addEventListener('keydown', (e) => {
       el.btnPreset.click();
       break;
     case 't': case 'T':
-      el.btnTune.click();
+      setStatusOverride('AUTO TUNE ACTIVE', 1200);
       break;
     case 'f': case 'F':
       if (!document.fullscreenElement) {
